@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Deploy: firebase deploy --only firestore:rules
+//
+// Single-owner model: a shop's Firestore path is always /shops/{uid}, where
+// {uid} is that owner's own Firebase Auth uid (see settingsService.
+// ensureShopProvisioned). So "can this request touch this data" collapses
+// to one check — is the signed-in user the owner of this exact shop path —
+// with no role lookups or extra reads needed.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(shopId) {
+      return request.auth != null && request.auth.uid == shopId;
+    }
+
+    match /shops/{shopId} {
+      allow read, write: if isOwner(shopId);
+
+      match /{document=**} {
+        allow read, write: if isOwner(shopId);
+      }
+    }
+  }
+}

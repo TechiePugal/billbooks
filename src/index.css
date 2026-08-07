@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Visible keyboard focus everywhere — big-button POS UI still needs to be
+   operable by keyboard/scanner-gun input on the counter, not just touch. */
+:focus-visible {
+  outline: 2px solid #0f5132;
+  outline-offset: 2px;
+}
+
+/* iOS Safari auto-zooms the whole page when a focused input's font is under
+   16px. Cart/report screens use smaller text elsewhere, so this is scoped
+   to just form fields and only kicks in below the tablet breakpoint. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
