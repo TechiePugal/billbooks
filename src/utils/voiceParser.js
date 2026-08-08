@@ -1,7 +1,9 @@
 /**
  * Turns a spoken phrase like "idli 2 dosa 3" or "இரண்டு இட்லி மூணு தோசை"
- * into structured { rawName, qty } pairs, then matches each rawName against
- * the shop's product list (including any owner-entered voice aliases).
+ * (or "rendu idli moonu dosa" — Tamil numbers typed/heard in Latin letters,
+ * extremely common with Indian cashiers) into structured { rawName, qty }
+ * pairs, then matches each rawName against the shop's product list
+ * (including any owner-entered voice aliases), across scripts.
  *
  * This is a best-effort parser, not a full NLU pipeline — it's tuned for the
  * short, transactional phrases a cashier actually says at a counter
@@ -17,8 +19,27 @@ const NUMBER_WORDS_EN = {
   dozen: 12, half: 0.5, single: 1, pair: 2, couple: 2
 };
 
-// Tamil number words — both the "formal" written forms and the informal
-// spoken forms a shop cashier is far more likely to actually use.
+// Romanized Tamil ("Tanglish") number words — how Tamil numbers actually come
+// out when spoken and picked up by an English-mode recognizer, or typed by
+// someone used to WhatsApp-style Tamil. This is the single biggest accuracy
+// gap the old parser had: it only understood Tamil-*script* number words.
+const NUMBER_WORDS_TANGLISH = {
+  onnu: 1, ondru: 1, oru: 1, onnuh: 1,
+  rendu: 2, rendhu: 2, erandu: 2, irandu: 2, iru: 2,
+  moonu: 3, moonru: 3, munu: 3,
+  naalu: 4, naangu: 4, nangu: 4,
+  anju: 5, aindhu: 5, ainthu: 5,
+  aaru: 6, aru: 6,
+  ezhu: 7, yezhu: 7, elu: 7, yelu: 7,
+  ettu: 8, yettu: 8,
+  onbathu: 9, onpathu: 9, ombathu: 9, onbadhu: 9,
+  pathu: 10, patthu: 10,
+  irupathu: 20,
+  muppathu: 30
+};
+
+// Tamil-script number words — formal written forms and the informal spoken
+// forms a shop cashier is far more likely to actually use.
 const NUMBER_WORDS_TA = {
   'பூஜ்ஜியம்': 0,
   'ஒன்று': 1, 'ஒண்ணு': 1, 'ஒரு': 1,
@@ -29,7 +50,7 @@ const NUMBER_WORDS_TA = {
   'ஆறு': 6,
   'ஏழு': 7,
   'எட்டு': 8,
-  'ஒன்பது': 9, 'ஒம்பது': 9, 'ஒன்பது': 9,
+  'ஒன்பது': 9, 'ஒம்பது': 9,
   'பத்து': 10, 'பத்த': 10,
   'இருபது': 20,
   'முப்பது': 30
@@ -50,6 +71,7 @@ function parseNumberToken(rawToken) {
   if (/^\d+(\.\d+)?$/.test(clean)) return Number(clean);
   const lower = clean.toLowerCase();
   if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS_EN, lower)) return NUMBER_WORDS_EN[lower];
+  if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS_TANGLISH, lower)) return NUMBER_WORDS_TANGLISH[lower];
   if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS_TA, clean)) return NUMBER_WORDS_TA[clean];
   return null;
 }
@@ -121,12 +143,149 @@ export function parseVoiceTranscript(transcript) {
   return results.filter((r) => r.qty > 0);
 }
 
+// ---------------------------------------------------------------------------
+// Tamil-script → Latin transliteration, so a spoken/typed Tamil-script word
+// can be fuzzy-matched against an English product name (and vice versa).
+// This is approximate (not full ISO-15919), but tuned to match the way
+// Tamil food words are actually spelled in Tanglish day-to-day — including
+// the intervocalic voicing rule (த/ட/ப/க soften to dh/d/b/g mid-word), which
+// is what makes "தோசை" transliterate to "thosai" and "இட்லி" come out as
+// "idli" instead of a stiffer, literal "itli".
+// ---------------------------------------------------------------------------
+
+const TAMIL_VOWELS = {
+  'அ': 'a', 'ஆ': 'aa', 'இ': 'i', 'ஈ': 'ii', 'உ': 'u', 'ஊ': 'uu',
+  'எ': 'e', 'ஏ': 'ee', 'ஐ': 'ai', 'ஒ': 'o', 'ஓ': 'oo', 'ஔ': 'au'
+};
+
+const TAMIL_VOWEL_SIGNS = {
+  'ா': 'aa', 'ி': 'i', 'ீ': 'ii', 'ு': 'u', 'ூ': 'uu',
+  'ெ': 'e', 'ே': 'ee', 'ை': 'ai', 'ொ': 'o', 'ோ': 'oo', 'ௌ': 'au'
+};
+
+// Colloquial Tanglish rarely preserves vowel length in spelling ("தோசை" is
+// written "dosai", not "doosai") — a second, length-collapsed vowel table
+// used to generate an alternate transliteration variant for matching.
+const TAMIL_VOWELS_COLLAPSED = {
+  'அ': 'a', 'ஆ': 'a', 'இ': 'i', 'ஈ': 'i', 'உ': 'u', 'ஊ': 'u',
+  'எ': 'e', 'ஏ': 'e', 'ஐ': 'ai', 'ஒ': 'o', 'ஓ': 'o', 'ஔ': 'au'
+};
+
+const TAMIL_VOWEL_SIGNS_COLLAPSED = {
+  'ா': 'a', 'ி': 'i', 'ீ': 'i', 'ு': 'u', 'ூ': 'u',
+  'ெ': 'e', 'ே': 'e', 'ை': 'ai', 'ொ': 'o', 'ோ': 'o', 'ௌ': 'au'
+};
+
+const PULLI = '\u0BCD';
+
+// Consonants that don't change sound based on position.
+const TAMIL_CONSONANTS_FIXED = {
+  'ங': 'ng', 'ஞ': 'ny', 'ண': 'n', 'ந': 'n', 'ம': 'm', 'ய': 'y', 'ர': 'r',
+  'ல': 'l', 'வ': 'v', 'ழ': 'zh', 'ள': 'l', 'ற': 'r', 'ன': 'n',
+  'ஜ': 'j', 'ஷ': 'sh', 'ஸ': 's', 'ஹ': 'h'
+};
+
+// Consonants that voice (soften) when they occur mid-word rather than at the
+// start of a word — real Tamil phonology, and the reason "தோசை" should
+// transliterate to "thosai" (voiced ச→s), not a stiffer literal form.
+const TAMIL_CONSONANTS_INITIAL = { 'க': 'k', 'ச': 'ch', 'ட': 't', 'த': 'th', 'ப': 'p' };
+const TAMIL_CONSONANTS_MEDIAL = { 'க': 'g', 'ச': 's', 'ட': 'd', 'த': 'dh', 'ப': 'b' };
+
+const TAMIL_CHAR_RE = /[\u0B80-\u0BFF]/;
+
+/**
+ * @param {string} str
+ * @param {{ voiceInitial?: boolean, collapseVowels?: boolean }} opts
+ *   voiceInitial: also soften the word's FIRST consonant (த/ட/ப/க/ச), matching
+ *     the common English loanword spelling ("dosa", not the phonetically
+ *     stricter "thosa") rather than strict Tamil word-initial phonology.
+ *   collapseVowels: drop long/short vowel distinctions ("dosai" not "doosai"),
+ *     matching how these words are actually spelled day-to-day.
+ */
+function transliterateTamil(str, { voiceInitial = false, collapseVowels = false } = {}) {
+  if (!str || !TAMIL_CHAR_RE.test(str)) return str || '';
+
+  const vowels = collapseVowels ? TAMIL_VOWELS_COLLAPSED : TAMIL_VOWELS;
+  const vowelSigns = collapseVowels ? TAMIL_VOWEL_SIGNS_COLLAPSED : TAMIL_VOWEL_SIGNS;
+  const chars = [...str];
+  let out = '';
+
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+
+    if (vowels[ch]) {
+      out += vowels[ch];
+      continue;
+    }
+
+    if (ch === PULLI) continue; // stray pulli with no preceding consonant — ignore
+
+    const isConsonant = TAMIL_CONSONANTS_FIXED[ch] || TAMIL_CONSONANTS_INITIAL[ch];
+    if (isConsonant) {
+      const wordStart = i === 0 || chars[i - 1] === ' ';
+      const useVoiced = !wordStart || voiceInitial;
+      const base = TAMIL_CONSONANTS_FIXED[ch]
+        ?? (useVoiced ? TAMIL_CONSONANTS_MEDIAL[ch] : TAMIL_CONSONANTS_INITIAL[ch]);
+      const next = chars[i + 1];
+
+      if (next === PULLI) {
+        // Geminate consonant (e.g. ப்ப in "சப்பாத்தி"): the pulli'd letter is
+        // silent — Tamil doubles the consonant for a slight emphasis, but
+        // spelling it out twice ("chabbaadhdhi") drifts far from how it's
+        // actually written ("chapathi"). Skip emitting the silent half; the
+        // repeated letter right after carries the sound.
+        const isGeminate = chars[i + 2] === ch;
+        if (!isGeminate) out += base;
+        i++;
+      } else if (next && vowelSigns[next]) {
+        out += base + vowelSigns[next];
+        i++;
+      } else {
+        out += base + 'a';
+      }
+      continue;
+    }
+
+    if (ch === ' ') {
+      out += ' ';
+    } else if (!TAMIL_CHAR_RE.test(ch)) {
+      out += ch; // pass through digits / Latin characters already in the string
+    }
+    // else: unmapped Tamil glyph (rare grantha combos) — skip rather than guess wrong
+  }
+
+  return out;
+}
+
+// Generates a small set of plausible Latin spellings for a Tamil-script
+// string, covering the "strict phonology" vs "common loanword spelling"
+// and "long vowel" vs "collapsed vowel" ambiguities — rather than betting on
+// one single romanization being right.
+function transliterateVariants(str) {
+  if (!str || !TAMIL_CHAR_RE.test(str)) return [str || ''];
+  return [...new Set([
+    transliterateTamil(str),
+    transliterateTamil(str, { voiceInitial: true }),
+    transliterateTamil(str, { collapseVowels: true }),
+    transliterateTamil(str, { voiceInitial: true, collapseVowels: true })
+  ])];
+}
+
 function normalize(str) {
   return (str || '')
     .toLowerCase()
     .normalize('NFC')
     .replace(/[^\p{L}\p{N}\s]/gu, '')
     .trim();
+}
+
+// All plausible normalized forms of a string: itself, plus (if it contains
+// Tamil script) every transliteration variant. For a pure-Latin string this
+// is just [itself] — harmless, the cross-script comparisons are simply
+// redundant-but-cheap for English words.
+function allForms(str) {
+  const forms = [normalize(str), ...transliterateVariants(str).map(normalize)];
+  return [...new Set(forms)].filter(Boolean);
 }
 
 // Simple Levenshtein edit distance, used only as a last-resort fuzzy fallback
@@ -154,38 +313,44 @@ function similarity(a, b) {
   return 1 - distance / Math.max(a.length, b.length);
 }
 
+function pairScore(candidateNorm, targetNorm) {
+  if (!candidateNorm || !targetNorm) return 0;
+  if (candidateNorm === targetNorm) return 1;
+  if (candidateNorm.includes(targetNorm) || targetNorm.includes(candidateNorm)) return 0.85;
+  return similarity(candidateNorm, targetNorm) * 0.75; // cap fuzzy matches below substring matches
+}
+
 function candidateNamesForProduct(product) {
   const aliases = (product.voiceAliases || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return [product.name, ...aliases].filter(Boolean).map((name) => ({ raw: name, norm: normalize(name) }));
+  return [product.name, ...aliases].filter(Boolean);
 }
 
 /**
- * Matches a spoken item name against the product list. Tries, in order:
- * exact match, substring match, then fuzzy (edit-distance) match — against
- * both the product's name and any owner-entered voice aliases.
+ * Matches a spoken item name against the product list — trying the raw
+ * (native-script) form AND a Tamil→Latin transliterated form on both sides,
+ * so "இட்லி" matches a product named "Idli" and "dosai" matches a product
+ * named "தோசை", not just matches within the same script.
  *
  * @returns {{product: object, score: number} | null}
  */
 export function matchProduct(rawName, products) {
-  const target = normalize(rawName);
-  if (!target) return null;
+  const targetForms = allForms(rawName);
+  if (targetForms.length === 0) return null;
 
   let best = null;
 
   for (const product of products) {
-    for (const candidate of candidateNamesForProduct(product)) {
-      if (!candidate.norm) continue;
-
+    for (const candidateRaw of candidateNamesForProduct(product)) {
+      const candidateForms = allForms(candidateRaw);
       let score = 0;
-      if (candidate.norm === target) {
-        score = 1;
-      } else if (candidate.norm.includes(target) || target.includes(candidate.norm)) {
-        score = 0.85;
-      } else {
-        score = similarity(candidate.norm, target) * 0.75; // cap fuzzy matches below substring matches
+      for (const c of candidateForms) {
+        for (const t of targetForms) {
+          const s = pairScore(c, t);
+          if (s > score) score = s;
+        }
       }
 
       if (!best || score > best.score) {
@@ -215,6 +380,33 @@ export function parseAndMatch(transcript, products) {
       confidence: match?.score ?? 0
     };
   });
+}
+
+/**
+ * Given several alternative transcripts for the SAME utterance (the speech
+ * recognizer's ranked guesses), parses and matches each one against the
+ * product list and returns the results for whichever alternative actually
+ * matched the shop's products best. The recognizer's #1 guess is often
+ * wrong on Tamil food words it has no language model for — but the correct
+ * reading is frequently sitting right there in alternative #2 or #3.
+ *
+ * @param {string[]} transcripts
+ * @param {object[]} products
+ */
+export function parseBestAlternative(transcripts, products) {
+  let best = { transcript: transcripts[0] || '', results: [], score: -1 };
+
+  for (const transcript of transcripts) {
+    if (!transcript?.trim()) continue;
+    const results = parseAndMatch(transcript, products);
+    // Reward both how confident the matches are AND how many items matched —
+    // an alternative that recognises 2 items decently beats one that
+    // recognises 1 item perfectly and mangles the rest.
+    const score = results.reduce((sum, r) => sum + (r.product ? 0.5 + r.confidence : 0), 0);
+    if (score > best.score) best = { transcript, results, score };
+  }
+
+  return best;
 }
 
 export const SUPPORTS_SPEECH_RECOGNITION =

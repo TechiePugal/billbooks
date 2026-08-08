@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HiMicrophone, HiOutlineTrash } from 'react-icons/hi2';
+import { HiMicrophone, HiOutlineTrash, HiOutlineXMark } from 'react-icons/hi2';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 import { formatCurrency } from '../../utils/billing';
 import {
+  parseBestAlternative,
   parseAndMatch,
   SUPPORTS_SPEECH_RECOGNITION,
   SUPPORTS_SPEECH_SYNTHESIS
@@ -16,9 +17,11 @@ const LANGUAGES = [
 ];
 
 /**
- * Reads the parsed items back out loud in the chosen language, e.g.
- * "idli 2, dosa 3 கேட்டது" — so the cashier can confirm by ear, without
- * looking down at the screen, that the mic heard the order correctly.
+ * Reads a just-heard phrase back out loud, e.g. "idli 2, dosa 3 கேட்டது" —
+ * so the cashier can confirm by ear, without looking down at the screen,
+ * that the mic heard that phrase correctly. Called once per finalized
+ * phrase (not the whole growing bill) so it doesn't repeat everything
+ * said so far every time.
  */
 function speakConfirmation(results, langCode) {
   if (!SUPPORTS_SPEECH_SYNTHESIS || results.length === 0) return;
@@ -38,6 +41,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
   const [results, setResults] = useState([]);
   const [micError, setMicError] = useState('');
   const recognitionRef = useRef(null);
+  const userStoppedRef = useRef(false); // true once the cashier explicitly taps stop
 
   const totalToAdd = useMemo(
     () => results.filter((r) => r.product).reduce((sum, r) => sum + r.qty * r.product.sellingPrice, 0),
@@ -46,14 +50,23 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
   const matchedCount = results.filter((r) => r.product).length;
   const unmatchedCount = results.length - matchedCount;
 
-  const runParse = (text) => {
+  // Appends newly-heard items to the running bill rather than replacing it,
+  // so the cashier can keep talking — "idli 2 dosa 3" … pause … "vada 1" —
+  // and everything accumulates into one bill without re-tapping the mic.
+  const appendResults = (newEntries) => {
+    if (newEntries.length === 0) return;
+    setResults((prev) => [...prev, ...newEntries]);
+    speakConfirmation(newEntries, langCode);
+  };
+
+  const runManualParse = (text) => {
     if (!text.trim()) return;
     const parsed = parseAndMatch(text, products);
-    setResults(parsed);
-    if (parsed.length > 0) speakConfirmation(parsed, langCode);
+    appendResults(parsed);
   };
 
   const stopListening = () => {
+    userStoppedRef.current = true;
     recognitionRef.current?.stop();
   };
 
@@ -61,42 +74,67 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
     if (!SUPPORTS_SPEECH_RECOGNITION) return;
     setMicError('');
     setTranscript('');
-    setResults([]);
+    userStoppedRef.current = false;
 
     const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognitionImpl();
     recognition.lang = langCode;
-    recognition.continuous = false;
+    // Continuous + auto-restart-on-end (below) means the cashier can just
+    // keep talking — one phrase after another — building up the whole bill
+    // without tapping the mic again between items. Much faster at a counter.
+    recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+    // Ask for a few ranked guesses per phrase, not just the top one — the
+    // recognizer's #1 guess is often wrong on Tamil food words it has no
+    // language model for, but the right reading is frequently in guess #2/#3.
+    recognition.maxAlternatives = 4;
 
     recognition.onstart = () => setIsListening(true);
 
     recognition.onresult = (event) => {
-      let finalText = '';
       let interimText = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const chunk = event.results[i];
-        if (chunk.isFinal) finalText += chunk[0].transcript;
-        else interimText += chunk[0].transcript;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          const alternatives = [];
+          for (let a = 0; a < result.length; a++) alternatives.push(result[a].transcript);
+          const best = parseBestAlternative(alternatives, products);
+          setTranscript(best.transcript.trim());
+          appendResults(best.results);
+        } else {
+          interimText += result[0].transcript;
+        }
       }
-      const combined = (finalText || interimText).trim();
-      setTranscript(combined);
-      if (finalText.trim()) runParse(finalText.trim());
+      if (interimText.trim()) setTranscript(interimText.trim());
     };
 
     recognition.onerror = (event) => {
       if (event.error === 'not-allowed' || event.error === 'permission-denied') {
         setMicError('Microphone permission was denied. Allow mic access in your browser settings and try again.');
-      } else if (event.error === 'no-speech') {
-        setMicError('Didn\u2019t catch that — try again, a bit closer to the mic.');
+        userStoppedRef.current = true; // don't auto-restart into another permission failure
+        setIsListening(false);
+      } else if (event.error === 'no-speech' || event.error === 'aborted') {
+        // Expected in continuous mode during natural pauses — onend will
+        // restart it quietly, no need to alarm the cashier with an error.
       } else {
         setMicError('Voice recognition had a problem. You can type the order below instead.');
+        setIsListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      // Some browsers end the session on their own after a silence even in
+      // continuous mode — restart automatically unless the cashier chose to stop.
+      if (!userStoppedRef.current) {
+        try {
+          recognition.start();
+          return;
+        } catch {
+          // fall through to marking as stopped if restart itself fails
+        }
       }
       setIsListening(false);
     };
-
-    recognition.onend = () => setIsListening(false);
 
     recognitionRef.current = recognition;
     recognition.start();
@@ -108,6 +146,8 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
   };
 
   const removeResult = (index) => setResults((prev) => prev.filter((_, i) => i !== index));
+
+  const clearAll = () => setResults([]);
 
   const updateQty = (index, qty) =>
     setResults((prev) => prev.map((r, i) => (i === index ? { ...r, qty: Math.max(1, qty) } : r)));
@@ -144,6 +184,12 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Start listening the moment the modal opens — one less tap for every bill.
+  useEffect(() => {
+    if (isOpen && SUPPORTS_SPEECH_RECOGNITION) startListening();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Voice Billing">
       <div className="space-y-4">
@@ -152,7 +198,13 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
             <button
               key={l.code}
               type="button"
-              onClick={() => setLangCode(l.code)}
+              onClick={() => {
+                setLangCode(l.code);
+                if (isListening) {
+                  stopListening();
+                  setTimeout(startListening, 150);
+                }
+              }}
               className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
                 langCode === l.code ? 'bg-brand-500 text-white' : 'bg-brand-50 text-brand-600'
               }`}
@@ -177,8 +229,8 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
             <p className="text-center text-sm text-gray-500">
               {isListening
                 ? langCode === 'ta-IN'
-                  ? 'கேட்கிறேன்… சொல்லுங்கள்'
-                  : 'Listening… speak now'
+                  ? 'கேட்கிறேன்… சொல்லுங்கள் — முடிந்ததும் நிறுத்தலாம்'
+                  : 'Listening… keep going, tap to stop when done'
                 : 'Tap the mic and say e.g. "idli 2 dosa 3"'}
             </p>
             {transcript && (
@@ -201,7 +253,14 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
                 placeholder='e.g. "idli 2 dosa 3"'
                 className="flex-1 rounded-card border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
               />
-              <Button className="w-auto px-4" size="sm" onClick={() => runParse(manualText)}>
+              <Button
+                className="w-auto px-4"
+                size="sm"
+                onClick={() => {
+                  runManualParse(manualText);
+                  setManualText('');
+                }}
+              >
                 Parse
               </Button>
             </div>
@@ -210,9 +269,17 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
 
         {results.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              {matchedCount} matched{unmatchedCount > 0 ? ` · ${unmatchedCount} not recognised` : ''}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {matchedCount} matched{unmatchedCount > 0 ? ` · ${unmatchedCount} not recognised` : ''}
+              </p>
+              <button
+                onClick={clearAll}
+                className="flex items-center gap-0.5 text-xs font-medium text-gray-400 active:text-red-500"
+              >
+                <HiOutlineXMark className="h-3.5 w-3.5" /> Clear all
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-2.5">
               {results.map((r, i) => (
                 <div
