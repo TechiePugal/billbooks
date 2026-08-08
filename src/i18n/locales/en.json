@@ -211,7 +211,13 @@
     "leastSelling": "Least Selling Products",
     "noDataPeriod": "No data for this period.",
     "topCustomers": "Top Customers",
-    "noCustomersYet": "No repeat-identifiable customers yet — phone numbers are optional at checkout."
+    "noCustomersYet": "No repeat-identifiable customers yet — phone numbers are optional at checkout.",
+    "allBills": "All Bills",
+    "searchBillsPlaceholder": "Search by invoice no., customer name or phone…",
+    "noBillsMatch": "No bills match your search.",
+    "walkIn": "Walk-in customer",
+    "viewBill": "View bill",
+    "reprintBill": "Reprint bill"
   },
   "settings": {
     "title": "Settings",

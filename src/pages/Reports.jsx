@@ -27,7 +27,9 @@ import {
 } from '../services/reportService';
 import { useAuthStore } from '../store/authStore';
 import { useActiveProducts, useCategories } from '../hooks/useProducts';
+import { useShopSettings } from '../hooks/useShopSettings';
 import { formatCurrency } from '../utils/billing';
+import BillsList from '../components/reports/BillsList';
 
 const RANGE_PRESETS = {
   today: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }),
@@ -43,6 +45,7 @@ export default function Reports() {
   const shopId = useAuthStore((s) => s.user?.shopId);
   const { products } = useActiveProducts();
   const categories = useCategories();
+  const { settings } = useShopSettings();
   const [range, setRange] = useState('today');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -224,6 +227,10 @@ export default function Reports() {
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="mt-4">
+            <BillsList orders={orders} settings={settings} />
           </div>
         </>
       )}
