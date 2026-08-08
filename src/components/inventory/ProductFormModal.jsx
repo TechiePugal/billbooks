@@ -1,25 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
+import { HiMicrophone } from 'react-icons/hi2';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 import Input from '../common/Input';
 import ImageUploader from '../common/ImageUploader';
 import { createProduct, updateProduct, createCategory } from '../../services/productService';
 import { useAuthStore } from '../../store/authStore';
+import { SUPPORTS_SPEECH_RECOGNITION } from '../../utils/voiceParser';
 
 const UNITS = ['pcs', 'kg', 'g', 'ltr', 'ml', 'plate', 'cup', 'box'];
 
+// The app's UI language and the mic's dictation language are separate
+// choices, but defaulting dictation to match the UI saves a tap for the
+// common case where the shop owner speaks the language they've set the app to.
+const UI_TO_VOICE_LANG = { en: 'en-IN', ta: 'ta-IN', hi: 'hi-IN' };
+
+function capitalizeWords(str) {
+  return str.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
+
 export default function ProductFormModal({ isOpen, onClose, product, categories }) {
+  const { t, i18n } = useTranslation();
   const shopId = useAuthStore((s) => s.user?.shopId);
   const [imageUrl, setImageUrl] = useState(product?.imageUrl || '');
   const [isSaving, setIsSaving] = useState(false);
   const [newCategory, setNewCategory] = useState('');
+  const [isDictatingName, setIsDictatingName] = useState(false);
+  const nameDictationRef = useRef(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors }
   } = useForm({ defaultValues: product || defaultValues() });
 
@@ -27,6 +43,11 @@ export default function ProductFormModal({ isOpen, onClose, product, categories 
     reset(product || defaultValues());
     setImageUrl(product?.imageUrl || '');
   }, [product, reset]);
+
+  // Stop any in-progress dictation if the modal closes mid-listen.
+  useEffect(() => {
+    if (!isOpen) nameDictationRef.current?.stop();
+  }, [isOpen]);
 
   function defaultValues() {
     return {
@@ -46,10 +67,54 @@ export default function ProductFormModal({ isOpen, onClose, product, categories 
     };
   }
 
+  // Speaks the product name straight into the field — handy at billing-rush
+  // times when typing Tamil/Hindi script on a phone keyboard is slow, or
+  // when adding several new items to the menu at once.
+  const toggleNameDictation = () => {
+    if (isDictatingName) {
+      nameDictationRef.current?.stop();
+      return;
+    }
+    if (!SUPPORTS_SPEECH_RECOGNITION) return;
+
+    let recognition;
+    try {
+      const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognitionImpl();
+    } catch {
+      toast.error(t('voice.genericError'));
+      return;
+    }
+
+    recognition.lang = UI_TO_VOICE_LANG[i18n.language] || 'en-IN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsDictatingName(true);
+    recognition.onresult = (event) => {
+      const text = event.results?.[0]?.[0]?.transcript?.trim();
+      if (text) setValue('name', capitalizeWords(text), { shouldValidate: true, shouldDirty: true });
+    };
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        toast.error(t('voice.genericError'));
+      }
+    };
+    recognition.onend = () => setIsDictatingName(false);
+
+    nameDictationRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      setIsDictatingName(false);
+    }
+  };
+
   const handleAddCategory = async () => {
     if (!newCategory.trim()) return;
     await createCategory(shopId, newCategory.trim());
-    toast.success('Category added');
+    toast.success(t('productForm.categoryAddedToast'));
     setNewCategory('');
   };
 
@@ -68,46 +133,71 @@ export default function ProductFormModal({ isOpen, onClose, product, categories 
 
       if (product?.id) {
         await updateProduct(shopId, product.id, payload);
-        toast.success('Product updated');
+        toast.success(t('productForm.productUpdatedToast'));
       } else {
         await createProduct(shopId, payload);
-        toast.success('Product added');
+        toast.success(t('productForm.productAddedToast'));
       }
       onClose();
     } catch (err) {
-      toast.error(err.message || 'Could not save product');
+      toast.error(err.message || t('productForm.saveFailedToast'));
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={product ? 'Edit Product' : 'Add Product'}>
+    <Modal isOpen={isOpen} onClose={onClose} title={product ? t('productForm.editTitle') : t('productForm.addTitle')}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <ImageUploader folder="products" value={imageUrl} onChange={setImageUrl} label="Product photo" />
-
-        <Input label="Product name" {...register('name', { required: 'Required' })} error={errors.name?.message} />
-        <Input label="Description" {...register('description')} />
+        <ImageUploader folder="products" value={imageUrl} onChange={setImageUrl} label={t('productForm.productPhoto')} />
 
         <div>
-          <Input
-            label="Voice billing names (optional)"
-            placeholder="e.g. idli, இட்லி, idly"
-            {...register('voiceAliases')}
-          />
+          <span className="mb-1 block text-sm font-medium text-gray-600">{t('productForm.productName')}</span>
+          <div className="relative">
+            <input
+              {...register('name', { required: t('productForm.required') })}
+              placeholder={t('productForm.productNamePlaceholder')}
+              className={`w-full rounded-card border border-gray-200 bg-white px-4 py-3 text-base focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 ${
+                SUPPORTS_SPEECH_RECOGNITION ? 'pr-12' : ''
+              } ${errors.name ? 'border-red-400' : ''}`}
+            />
+            {SUPPORTS_SPEECH_RECOGNITION && (
+              <button
+                type="button"
+                onClick={toggleNameDictation}
+                aria-label={t('voice.title')}
+                className={`absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition ${
+                  isDictatingName ? 'animate-pulse bg-red-500 text-white' : 'bg-brand-50 text-brand-600'
+                }`}
+              >
+                <HiMicrophone className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          {errors.name && <span className="mt-1 block text-xs text-red-500">{errors.name.message}</span>}
           <p className="mt-1 text-xs text-gray-400">
-            Other ways staff say this item out loud, comma separated — in Tamil or English. Helps the
-            mic on the Billing screen recognise it correctly.
+            {isDictatingName ? t('productForm.listeningShort') : SUPPORTS_SPEECH_RECOGNITION ? t('productForm.voiceNameHint') : ''}
           </p>
         </div>
 
+        <Input label={t('productForm.description')} {...register('description')} />
+
+        <div>
+          <Input
+            label={t('productForm.voiceAliasesLabel')}
+            placeholder={t('productForm.voiceAliasesPlaceholder')}
+            {...register('voiceAliases')}
+          />
+          <p className="mt-1 text-xs text-gray-400">{t('productForm.voiceAliasesHint')}</p>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
-          <Input label="SKU" {...register('sku')} />
-          <Input label="Barcode" {...register('barcode')} />
+          <Input label={t('productForm.sku')} {...register('sku')} />
+          <Input label={t('productForm.barcode')} {...register('barcode')} />
         </div>
 
         <div>
-          <span className="mb-1 block text-sm font-medium text-gray-600">Category</span>
+          <span className="mb-1 block text-sm font-medium text-gray-600">{t('productForm.category')}</span>
           <select {...register('categoryId')} className="w-full rounded-card border border-gray-200 px-4 py-3 text-base">
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -119,39 +209,39 @@ export default function ProductFormModal({ isOpen, onClose, product, categories 
             <input
               value={newCategory}
               onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="New category name"
+              placeholder={t('productForm.newCategoryPlaceholder')}
               className="flex-1 rounded-card border border-gray-200 px-3 py-1.5 text-xs"
             />
             <button type="button" onClick={handleAddCategory} className="text-xs font-semibold text-brand-500">
-              + Add
+              {t('productForm.addCategory')}
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <Input
-            label="Purchase price"
+            label={t('productForm.purchasePrice')}
             type="number"
             step="0.01"
             {...register('purchasePrice')}
           />
           <Input
-            label="Selling price"
+            label={t('productForm.sellingPrice')}
             type="number"
             step="0.01"
-            {...register('sellingPrice', { required: 'Required' })}
+            {...register('sellingPrice', { required: t('productForm.required') })}
             error={errors.sellingPrice?.message}
           />
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <Input label="GST %" type="number" {...register('gstRate')} />
-          <Input label="Opening stock" type="number" {...register('openingStock')} />
-          <Input label="Min stock alert" type="number" {...register('minStock')} />
+          <Input label={t('productForm.gstPercent')} type="number" {...register('gstRate')} />
+          <Input label={t('productForm.openingStock')} type="number" {...register('openingStock')} />
+          <Input label={t('productForm.minStockAlert')} type="number" {...register('minStock')} />
         </div>
 
         <div>
-          <span className="mb-1 block text-sm font-medium text-gray-600">Unit</span>
+          <span className="mb-1 block text-sm font-medium text-gray-600">{t('productForm.unit')}</span>
           <select {...register('unit')} className="w-full rounded-card border border-gray-200 px-4 py-3 text-base">
             {UNITS.map((u) => (
               <option key={u} value={u}>
@@ -162,15 +252,15 @@ export default function ProductFormModal({ isOpen, onClose, product, categories 
         </div>
 
         <div>
-          <span className="mb-1 block text-sm font-medium text-gray-600">Status</span>
+          <span className="mb-1 block text-sm font-medium text-gray-600">{t('productForm.status')}</span>
           <select {...register('status')} className="w-full rounded-card border border-gray-200 px-4 py-3 text-base">
-            <option value="active">Active — visible on Billing screen</option>
-            <option value="inactive">Inactive — hidden from Billing screen</option>
+            <option value="active">{t('productForm.statusActive')}</option>
+            <option value="inactive">{t('productForm.statusInactive')}</option>
           </select>
         </div>
 
         <Button type="submit" loading={isSaving}>
-          {product ? 'Save Changes' : 'Add Product'}
+          {product ? t('productForm.saveChanges') : t('productForm.addProduct')}
         </Button>
       </form>
     </Modal>

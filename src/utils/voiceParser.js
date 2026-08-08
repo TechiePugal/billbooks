@@ -275,7 +275,13 @@ function normalize(str) {
   return (str || '')
     .toLowerCase()
     .normalize('NFC')
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    // Explicit character ranges instead of \p{L}/\p{N} Unicode property
+    // escapes: those aren't supported by every JS engine still in use on
+    // budget/older Android phones, and a regex literal that fails to even
+    // *parse* breaks the entire file — and with it, the whole app. Covers
+    // Latin, digits, and the Tamil Unicode block (voice input only ever
+    // needs to normalize Latin/Tamil text here).
+    .replace(/[^a-z0-9\u0B80-\u0BFF\s]/g, '')
     .trim();
 }
 

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 import Input from '../common/Input';
@@ -13,20 +14,21 @@ import { saveOrder } from '../../services/orderService';
 import { formatCurrency } from '../../utils/billing';
 import { formatInvoiceNumber } from '../../utils/invoiceNumber';
 
-const METHODS = [
-  { id: 'cash', label: 'Cash' },
-  { id: 'upi', label: 'UPI' },
-  { id: 'card', label: 'Card' },
-  { id: 'split', label: 'Split' }
-];
-
 export default function PaymentModal({ isOpen, onClose, totals }) {
+  const { t } = useTranslation();
   const items = useCartStore((s) => s.items);
   const discount = useCartStore((s) => s.discount);
   const customer = useCartStore((s) => s.customer);
   const clearCart = useCartStore((s) => s.clearCart);
   const user = useAuthStore((s) => s.user);
   const { settings } = useShopSettings();
+
+  const METHODS = [
+    { id: 'cash', label: t('payment.cash') },
+    { id: 'upi', label: t('payment.upi') },
+    { id: 'card', label: t('payment.card') },
+    { id: 'split', label: t('payment.split') }
+  ];
 
   const [method, setMethod] = useState('cash');
   const [cashReceived, setCashReceived] = useState('');
@@ -74,9 +76,9 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
       const { invoiceSeq } = await saveOrder(user.shopId, order);
       setSavedOrder({ ...order, invoiceSeq });
       clearCart();
-      toast.success('Bill saved!');
+      toast.success(t('payment.billSavedToast'));
     } catch (err) {
-      toast.error(err.message || 'Could not save the order. Please try again.');
+      toast.error(err.message || t('payment.saveFailedToast'));
     } finally {
       setIsSaving(false);
     }
@@ -84,7 +86,7 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
 
   const handleWhatsApp = () => {
     if (!customer.phone) {
-      toast.error('Add a customer phone number to share on WhatsApp.');
+      toast.error(t('payment.addPhoneForWhatsAppToast'));
       return;
     }
     const invoiceNo = formatInvoiceNumber(settings.invoicePrefix, savedOrder.invoiceSeq);
@@ -108,20 +110,20 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
   // --- Post-payment: invoice + print/share actions ---
   if (savedOrder) {
     return (
-      <Modal isOpen={isOpen} onClose={handleStartNewBill} title="Bill Saved">
+      <Modal isOpen={isOpen} onClose={handleStartNewBill} title={t('payment.billSaved')}>
         <div className="max-h-[50vh] overflow-y-auto rounded-card border border-gray-100">
           <Invoice ref={invoiceRef} shop={settings} order={savedOrder} />
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button variant="primary" onClick={handlePrint}>
-            Print Invoice
+            {t('payment.printInvoice')}
           </Button>
           <Button variant="outline" onClick={handleWhatsApp}>
-            Share on WhatsApp
+            {t('payment.shareOnWhatsApp')}
           </Button>
         </div>
         <Button variant="accent" className="mt-2" onClick={handleStartNewBill}>
-          Start New Bill
+          {t('payment.startNewBill')}
         </Button>
       </Modal>
     );
@@ -129,7 +131,7 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
 
   // --- Payment collection ---
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Take Payment">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('payment.takePayment')}>
       <p className="mb-3 text-center font-display text-3xl font-bold text-brand-700">
         {formatCurrency(totals.grandTotal)}
       </p>
@@ -151,7 +153,7 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
       {method === 'cash' && (
         <div className="space-y-2">
           <Input
-            label="Amount received"
+            label={t('payment.amountReceived')}
             type="number"
             inputMode="decimal"
             value={cashReceived}
@@ -159,7 +161,7 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
             autoFocus
           />
           <div className="flex justify-between rounded-card bg-brand-50 px-3 py-2 text-sm font-medium">
-            <span>Balance to return</span>
+            <span>{t('payment.balanceToReturn')}</span>
             <span>{formatCurrency(balanceReturn)}</span>
           </div>
         </div>
@@ -176,7 +178,7 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
             invoiceNumber="pending"
           />
           <Input
-            label="Transaction ID (optional)"
+            label={t('payment.transactionIdOptional')}
             value={transactionId}
             onChange={(e) => setTransactionId(e.target.value)}
           />
@@ -185,7 +187,7 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
 
       {method === 'card' && (
         <Input
-          label="Transaction / Reference ID (optional)"
+          label={t('payment.transactionRefOptional')}
           value={transactionId}
           onChange={(e) => setTransactionId(e.target.value)}
         />
@@ -204,13 +206,13 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
             />
           ))}
           <div className={`text-right text-sm font-medium ${splitTotal === totals.grandTotal ? 'text-brand-600' : 'text-red-500'}`}>
-            Entered: {formatCurrency(splitTotal)} / {formatCurrency(totals.grandTotal)}
+            {t('payment.entered')}: {formatCurrency(splitTotal)} / {formatCurrency(totals.grandTotal)}
           </div>
         </div>
       )}
 
       <Button className="mt-4" onClick={handleConfirm} disabled={!canConfirm} loading={isSaving}>
-        Confirm Payment
+        {t('payment.confirmPayment')}
       </Button>
     </Modal>
   );

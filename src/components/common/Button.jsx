@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 const VARIANTS = {
   primary: 'bg-brand-500 text-white active:bg-brand-600',
   accent: 'bg-accent-500 text-brand-900 active:bg-accent-600',
@@ -15,6 +17,7 @@ export default function Button({
   children,
   ...props
 }) {
+  const { t } = useTranslation();
   const sizeClass = size === 'lg' ? 'py-4 text-base' : size === 'sm' ? 'py-2 text-sm' : 'py-3 text-sm';
 
   return (
@@ -23,7 +26,7 @@ export default function Button({
       className={`w-full rounded-card font-semibold shadow-card transition active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 ${sizeClass} ${VARIANTS[variant]} ${className}`}
       {...props}
     >
-      {loading ? 'Please wait…' : children}
+      {loading ? t('common.loading') : children}
     </button>
   );
 }

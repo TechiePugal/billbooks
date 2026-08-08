@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import ImageUploader from '../components/common/ImageUploader';
@@ -9,14 +10,14 @@ import { saveShopSettings, exportBackup, restoreBackup } from '../services/setti
 import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
 import { logout } from '../services/authService';
-
-const SECTIONS = ['Shop', 'Invoice', 'Payment', 'Printer', 'App', 'Backup'];
+import { SUPPORTED_LANGUAGES, setAppLanguage } from '../i18n';
 
 export default function Settings() {
+  const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const shopId = useAuthStore((s) => s.user?.shopId);
   const { settings, isLoading } = useShopSettings();
-  const { register, handleSubmit, reset, watch, setValue } = useForm({ defaultValues: settings });
+  const { register, handleSubmit, reset, watch } = useForm({ defaultValues: settings });
   const [isSaving, setIsSaving] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
@@ -24,6 +25,15 @@ export default function Settings() {
   const restoreInputRef = useRef(null);
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
+
+  const SECTIONS = [
+    { key: 'Shop', label: t('settings.sectionShop') },
+    { key: 'Invoice', label: t('settings.sectionInvoice') },
+    { key: 'Payment', label: t('settings.sectionPayment') },
+    { key: 'Printer', label: t('settings.sectionPrinter') },
+    { key: 'App', label: t('settings.sectionApp') },
+    { key: 'Backup', label: t('settings.sectionBackup') }
+  ];
 
   useEffect(() => {
     if (!isLoading) {
@@ -37,20 +47,33 @@ export default function Settings() {
     setIsSaving(true);
     try {
       await saveShopSettings(shopId, { ...values, logoUrl, staticQrUrl: qrImageUrl });
-      toast.success('Settings saved');
+      toast.success(t('settings.settingsSavedToast'));
     } catch (err) {
-      toast.error(err.message || 'Could not save settings');
+      toast.error(err.message || t('settings.settingsSaveFailedToast'));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Language switches the whole app instantly on this device, and is also
+  // persisted to the shop's settings straight away (not gated behind the
+  // "Save Changes" button below) — a language choice should take effect the
+  // moment it's tapped, the same way the theme toggle next to it does.
+  const handleLanguageChange = (code) => {
+    setAppLanguage(code);
+    if (shopId) {
+      saveShopSettings(shopId, { language: code }).catch(() => {
+        // Non-fatal — the app still switched language on this device either way.
+      });
     }
   };
 
   const handleBackup = async () => {
     try {
       await exportBackup(shopId);
-      toast.success('Backup downloaded');
+      toast.success(t('settings.backupDownloadedToast'));
     } catch {
-      toast.error('Backup failed');
+      toast.error(t('settings.backupFailedToast'));
     }
   };
 
@@ -61,9 +84,9 @@ export default function Settings() {
       const text = await file.text();
       const json = JSON.parse(text);
       const result = await restoreBackup(shopId, json);
-      toast.success(`Restored ${result.restoredProducts} products, ${result.restoredCategories} categories`);
+      toast.success(t('settings.restoredToast', { products: result.restoredProducts, categories: result.restoredCategories }));
     } catch {
-      toast.error('That file could not be read as a valid backup.');
+      toast.error(t('settings.restoreFailedToast'));
     } finally {
       e.target.value = '';
     }
@@ -73,108 +96,99 @@ export default function Settings() {
 
   return (
     <div className="p-4 pb-6">
-      <h1 className="mb-4 font-display text-xl font-bold text-brand-700">Settings</h1>
+      <h1 className="mb-4 font-display text-xl font-bold text-brand-700">{t('settings.title')}</h1>
 
       <div className="mb-4 flex gap-2 overflow-x-auto">
         {SECTIONS.map((s) => (
           <button
-            key={s}
-            onClick={() => setActiveSection(s)}
+            key={s.key}
+            onClick={() => setActiveSection(s.key)}
             className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium ${
-              activeSection === s ? 'bg-brand-500 text-white' : 'bg-white text-gray-500 shadow-sm'
+              activeSection === s.key ? 'bg-brand-500 text-white' : 'bg-white text-gray-500 shadow-sm'
             }`}
           >
-            {s}
+            {s.label}
           </button>
         ))}
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {activeSection === 'Shop' && (
-          <Section title="Shop Details">
-            <ImageUploader folder="shop-logo" value={logoUrl} onChange={setLogoUrl} shape="round" label="Shop logo" />
-            <Input label="Shop name" {...register('shopName')} />
-            <Input label="Address" {...register('address')} />
+          <Section title={t('settings.shopDetails')}>
+            <ImageUploader folder="shop-logo" value={logoUrl} onChange={setLogoUrl} shape="round" label={t('settings.shopLogo')} />
+            <Input label={t('settings.shopName')} {...register('shopName')} />
+            <Input label={t('settings.address')} {...register('address')} />
             <div className="grid grid-cols-2 gap-2">
-              <Input label="Phone" {...register('phone')} />
-              <Input label="Email" type="email" {...register('email')} />
+              <Input label={t('settings.phone')} {...register('phone')} />
+              <Input label={t('settings.email')} type="email" {...register('email')} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Input label="GST Number" {...register('gstNumber')} />
-              <Input label="FSSAI Number" {...register('fssaiNumber')} />
+              <Input label={t('settings.gstNumber')} {...register('gstNumber')} />
+              <Input label={t('settings.fssaiNumber')} {...register('fssaiNumber')} />
             </div>
           </Section>
         )}
 
         {activeSection === 'Invoice' && (
-          <Section title="Invoice Settings">
+          <Section title={t('settings.invoiceSettings')}>
             <div className="grid grid-cols-2 gap-2">
-              <Input label="Invoice prefix" {...register('invoicePrefix')} />
+              <Input label={t('settings.invoicePrefix')} {...register('invoicePrefix')} />
               <div>
-                <span className="mb-1 block text-sm font-medium text-gray-600">Paper size</span>
+                <span className="mb-1 block text-sm font-medium text-gray-600">{t('settings.paperSize')}</span>
                 <select {...register('paperSize')} className="w-full rounded-card border border-gray-200 px-4 py-3">
-                  <option value="58mm">58mm Thermal</option>
-                  <option value="80mm">80mm Thermal</option>
-                  <option value="a4">A4</option>
+                  <option value="58mm">{t('settings.paper58')}</option>
+                  <option value="80mm">{t('settings.paper80')}</option>
+                  <option value="a4">{t('settings.paperA4')}</option>
                 </select>
               </div>
             </div>
-            <Input label="Footer message" {...register('footerMessage')} />
-            <ToggleRow label="Show logo on invoice" {...register('showLogo')} />
-            <ToggleRow label="Show GST number on invoice" {...register('showGst')} />
-            <ToggleRow label="Show payment QR on invoice" {...register('showQr')} />
+            <Input label={t('settings.footerMessage')} {...register('footerMessage')} />
+            <ToggleRow label={t('settings.showLogoOnInvoice')} {...register('showLogo')} />
+            <ToggleRow label={t('settings.showGstOnInvoice')} {...register('showGst')} />
+            <ToggleRow label={t('settings.showQrOnInvoice')} {...register('showQr')} />
           </Section>
         )}
 
         {activeSection === 'Payment' && (
-          <Section title="Payment Settings">
+          <Section title={t('settings.paymentSettings')}>
             <div>
-              <span className="mb-1 block text-sm font-medium text-gray-600">QR type at checkout</span>
+              <span className="mb-1 block text-sm font-medium text-gray-600">{t('settings.qrTypeLabel')}</span>
               <select {...register('qrType')} className="w-full rounded-card border border-gray-200 px-4 py-3">
-                <option value="dynamic">Dynamic — auto-fills the exact bill amount (recommended)</option>
-                <option value="static">Static — a fixed QR image, customer types amount manually</option>
+                <option value="dynamic">{t('settings.qrDynamic')}</option>
+                <option value="static">{t('settings.qrStatic')}</option>
               </select>
             </div>
 
-            <Input label="Merchant name (shown to customer)" {...register('merchantName')} />
-            <Input label="Merchant UPI ID" placeholder="shopname@upi" {...register('upiId')} />
-            <p className="text-xs text-gray-400">
-              Used to build the Dynamic QR — the customer scans and the exact bill amount is pre-filled, so there's
-              no typing and no short-payment mistakes.
-            </p>
+            <Input label={t('settings.merchantName')} {...register('merchantName')} />
+            <Input label={t('settings.merchantUpiId')} placeholder="shopname@upi" {...register('upiId')} />
+            <p className="text-xs text-gray-400">{t('settings.dynamicQrHint')}</p>
 
             <ImageUploader
               folder="shop-logo"
               value={qrImageUrl}
               onChange={setQrImageUrl}
-              label="Static QR image (optional — from your bank/UPI app)"
+              label={t('settings.staticQrImage')}
             />
-            <p className="text-xs text-gray-400">
-              Only shown at checkout if "Static" is selected above. Useful as a backup if your UPI ID ever changes
-              or you'd rather show your bank's official QR.
-            </p>
+            <p className="text-xs text-gray-400">{t('settings.staticQrHint')}</p>
           </Section>
         )}
 
         {activeSection === 'Printer' && (
-          <Section title="Printer Settings">
+          <Section title={t('settings.printerSettings')}>
             <div>
-              <span className="mb-1 block text-sm font-medium text-gray-600">Default printer type</span>
+              <span className="mb-1 block text-sm font-medium text-gray-600">{t('settings.defaultPrinterType')}</span>
               <select {...register('printerType')} className="w-full rounded-card border border-gray-200 px-4 py-3">
-                <option value="browser">Browser print dialog (any USB/network printer)</option>
-                <option value="bluetooth">Bluetooth thermal printer</option>
+                <option value="browser">{t('settings.printerBrowser')}</option>
+                <option value="bluetooth">{t('settings.printerBluetooth')}</option>
               </select>
             </div>
-            <ToggleRow label="Auto-print after payment" {...register('autoPrint')} />
-            <p className="text-xs text-gray-400">
-              Bluetooth thermal printers pair through your device's own Bluetooth settings first; once paired, the
-              browser print dialog will list them like any other printer.
-            </p>
+            <ToggleRow label={t('settings.autoPrintAfterPayment')} {...register('autoPrint')} />
+            <p className="text-xs text-gray-400">{t('settings.printerBluetoothHint')}</p>
           </Section>
         )}
 
         {activeSection === 'App' && (
-          <Section title="App Preferences">
+          <Section title={t('settings.appPreferences')}>
             <div className="flex items-center gap-3 rounded-card bg-brand-50 p-3">
               {user?.photoURL ? (
                 <img src={user.photoURL} alt="" className="h-11 w-11 rounded-full object-cover" />
@@ -190,57 +204,63 @@ export default function Settings() {
             </div>
 
             <div className="flex items-center justify-between rounded-card bg-white p-3 shadow-card">
-              <span className="text-sm font-medium">Theme</span>
+              <span className="text-sm font-medium">{t('settings.theme')}</span>
               <button
                 type="button"
                 onClick={toggleTheme}
                 className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-600"
               >
-                {theme === 'light' ? 'Switch to Dark' : 'Switch to Light'}
+                {theme === 'light' ? t('settings.switchToDark') : t('settings.switchToLight')}
               </button>
             </div>
+
             <div>
-              <span className="mb-1 block text-sm font-medium text-gray-600">Language</span>
-              <select {...register('language')} className="w-full rounded-card border border-gray-200 px-4 py-3">
-                <option value="en">English</option>
-                <option value="ta">தமிழ் (Tamil)</option>
-              </select>
-              <p className="mt-1 text-xs text-gray-400">
-                Language is saved now; wiring every screen's text through a translation table is the next step —
-                today only this setting is stored so it's ready to switch on.
-              </p>
+              <span className="mb-1 block text-sm font-medium text-gray-600">{t('settings.language')}</span>
+              <div className="flex gap-2">
+                {SUPPORTED_LANGUAGES.map((l) => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => handleLanguageChange(l.code)}
+                    className={`flex-1 rounded-card py-3 text-sm font-semibold transition ${
+                      i18n.language === l.code ? 'bg-brand-500 text-white' : 'bg-white text-brand-600 shadow-card'
+                    }`}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-400">{t('settings.languageHint')}</p>
             </div>
+
             <Button
               type="button"
               variant="outline"
               onClick={() => {
-                if (window.confirm('Sign out of this shop?')) logout();
+                if (window.confirm(t('settings.signOutConfirm'))) logout();
               }}
             >
-              Sign Out
+              {t('settings.signOut')}
             </Button>
           </Section>
         )}
 
         {activeSection === 'Backup' && (
-          <Section title="Backup & Restore">
+          <Section title={t('settings.backupRestore')}>
             <Button type="button" onClick={handleBackup}>
-              Download Backup (JSON)
+              {t('settings.downloadBackup')}
             </Button>
             <Button type="button" variant="outline" onClick={() => restoreInputRef.current?.click()}>
-              Restore from Backup
+              {t('settings.restoreBackup')}
             </Button>
             <input ref={restoreInputRef} type="file" accept="application/json" onChange={handleRestoreFile} className="hidden" />
-            <p className="text-xs text-gray-400">
-              Backup exports your products, categories, customers, and orders as a JSON file. Restore only brings
-              back products and categories — past orders are never overwritten, to keep your sales history accurate.
-            </p>
+            <p className="text-xs text-gray-400">{t('settings.backupHint')}</p>
           </Section>
         )}
 
         {activeSection !== 'Backup' && (
           <Button type="submit" loading={isSaving}>
-            Save Changes
+            {t('common.saveChanges')}
           </Button>
         )}
       </form>

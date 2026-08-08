@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { HiMicrophone, HiOutlineTrash, HiOutlineXMark } from 'react-icons/hi2';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
@@ -11,30 +12,40 @@ import {
   SUPPORTS_SPEECH_SYNTHESIS
 } from '../../utils/voiceParser';
 
-const LANGUAGES = [
+const VOICE_LANGUAGES = [
   { code: 'ta-IN', label: 'தமிழ்' },
+  { code: 'hi-IN', label: 'हिन्दी' },
   { code: 'en-IN', label: 'English' }
 ];
 
+// The app's UI language (en/ta/hi) and the mic's recognition language are
+// separate choices — a Hindi-reading owner's cashier might still speak
+// Tamil orders — but defaulting the mic to match the UI on open saves a tap
+// the common case where they're the same.
+const UI_TO_VOICE_LANG = { en: 'en-IN', ta: 'ta-IN', hi: 'hi-IN' };
+
 /**
- * Reads a just-heard phrase back out loud, e.g. "idli 2, dosa 3 கேட்டது" —
- * so the cashier can confirm by ear, without looking down at the screen,
- * that the mic heard that phrase correctly. Called once per finalized
- * phrase (not the whole growing bill) so it doesn't repeat everything
- * said so far every time.
+ * Reads a just-heard phrase back out loud, e.g. "idli 2, dosa 3 heard" — so
+ * the cashier can confirm by ear, without looking down at the screen, that
+ * the mic heard that phrase correctly. Called once per finalized phrase
+ * (not the whole growing bill) so it doesn't repeat everything said so far.
  */
-function speakConfirmation(results, langCode) {
+function speakConfirmation(results, langCode, heardLabel) {
   if (!SUPPORTS_SPEECH_SYNTHESIS || results.length === 0) return;
-  const heard = results.map((r) => `${r.product ? r.product.name : r.rawName} ${r.qty}`).join(', ');
-  const text = langCode === 'ta-IN' ? `கேட்டது: ${heard}` : `Heard: ${heard}`;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = langCode;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
+  try {
+    const heard = results.map((r) => `${r.product ? r.product.name : r.rawName} ${r.qty}`).join(', ');
+    const utterance = new SpeechSynthesisUtterance(`${heardLabel}: ${heard}`);
+    utterance.lang = langCode;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Voice confirmation is a nice-to-have — never let it block adding items to the bill.
+  }
 }
 
 export default function VoiceBillingModal({ isOpen, onClose, products, onAddItems }) {
-  const [langCode, setLangCode] = useState('ta-IN');
+  const { t, i18n } = useTranslation();
+  const [langCode, setLangCode] = useState(UI_TO_VOICE_LANG[i18n.language] || 'ta-IN');
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [manualText, setManualText] = useState('');
@@ -49,6 +60,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
   );
   const matchedCount = results.filter((r) => r.product).length;
   const unmatchedCount = results.length - matchedCount;
+  const heardLabel = langCode === 'ta-IN' ? t('voice.heardTamil') : t('voice.heard');
 
   // Appends newly-heard items to the running bill rather than replacing it,
   // so the cashier can keep talking — "idli 2 dosa 3" … pause … "vada 1" —
@@ -56,7 +68,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
   const appendResults = (newEntries) => {
     if (newEntries.length === 0) return;
     setResults((prev) => [...prev, ...newEntries]);
-    speakConfirmation(newEntries, langCode);
+    speakConfirmation(newEntries, langCode, heardLabel);
   };
 
   const runManualParse = (text) => {
@@ -76,8 +88,15 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
     setTranscript('');
     userStoppedRef.current = false;
 
-    const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionImpl();
+    let recognition;
+    try {
+      const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognitionImpl();
+    } catch {
+      setMicError(t('voice.genericError'));
+      return;
+    }
+
     recognition.lang = langCode;
     // Continuous + auto-restart-on-end (below) means the cashier can just
     // keep talking — one phrase after another — building up the whole bill
@@ -110,14 +129,25 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
 
     recognition.onerror = (event) => {
       if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-        setMicError('Microphone permission was denied. Allow mic access in your browser settings and try again.');
+        setMicError(t('voice.micPermissionDenied'));
         userStoppedRef.current = true; // don't auto-restart into another permission failure
+        setIsListening(false);
+      } else if (event.error === 'language-not-supported') {
+        // Very common on budget Android phones that never downloaded a
+        // speech-recognition language pack for Tamil/Hindi — the fix is
+        // on-device, not in this app, so point at it directly.
+        setMicError(langCode === 'ta-IN' ? t('voice.languageNotSupportedTamil') : t('voice.languageNotSupported'));
+        userStoppedRef.current = true;
         setIsListening(false);
       } else if (event.error === 'no-speech' || event.error === 'aborted') {
         // Expected in continuous mode during natural pauses — onend will
         // restart it quietly, no need to alarm the cashier with an error.
+      } else if (event.error === 'network') {
+        setMicError(t('voice.networkError'));
+        userStoppedRef.current = true;
+        setIsListening(false);
       } else {
-        setMicError('Voice recognition had a problem. You can type the order below instead.');
+        setMicError(t('voice.genericError'));
         setIsListening(false);
       }
     };
@@ -137,7 +167,12 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      // Most commonly "already started" if a stray restart raced this call —
+      // safe to ignore; the existing session keeps running either way.
+    }
   };
 
   const toggleListening = () => {
@@ -160,11 +195,11 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
   const handleAddAll = () => {
     const toAdd = results.filter((r) => r.product);
     if (toAdd.length === 0) {
-      toast.error('No matched items to add yet');
+      toast.error(t('voice.noMatchedItemsError'));
       return;
     }
     onAddItems(toAdd);
-    toast.success(`${toAdd.length} item${toAdd.length > 1 ? 's' : ''} added to bill`);
+    toast.success(t('voice.itemsAddedToast', { count: toAdd.length }));
     handleClose();
   };
 
@@ -184,17 +219,11 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Start listening the moment the modal opens — one less tap for every bill.
-  useEffect(() => {
-    if (isOpen && SUPPORTS_SPEECH_RECOGNITION) startListening();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Voice Billing">
+    <Modal isOpen={isOpen} onClose={handleClose} title={t('voice.title')}>
       <div className="space-y-4">
         <div className="flex items-center justify-center gap-2">
-          {LANGUAGES.map((l) => (
+          {VOICE_LANGUAGES.map((l) => (
             <button
               key={l.code}
               type="button"
@@ -227,11 +256,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
               <HiMicrophone className="h-9 w-9" />
             </button>
             <p className="text-center text-sm text-gray-500">
-              {isListening
-                ? langCode === 'ta-IN'
-                  ? 'கேட்கிறேன்… சொல்லுங்கள் — முடிந்ததும் நிறுத்தலாம்'
-                  : 'Listening… keep going, tap to stop when done'
-                : 'Tap the mic and say e.g. "idli 2 dosa 3"'}
+              {isListening ? t('voice.listening') : t('voice.tapToStart')}
             </p>
             {transcript && (
               <p className="rounded-card bg-brand-50 px-3 py-2 text-center text-sm text-brand-700">
@@ -242,15 +267,12 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
           </div>
         ) : (
           <div className="space-y-2 rounded-card bg-accent-50 p-3 text-sm text-brand-800">
-            <p>
-              Voice input isn't supported in this browser. Try Chrome or Edge — or type the order below and
-              it'll be parsed the same way.
-            </p>
+            <p>{t('voice.notSupported')}</p>
             <div className="flex gap-2">
               <input
                 value={manualText}
                 onChange={(e) => setManualText(e.target.value)}
-                placeholder='e.g. "idli 2 dosa 3"'
+                placeholder={t('voice.typePlaceholder')}
                 className="flex-1 rounded-card border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
               />
               <Button
@@ -261,7 +283,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
                   setManualText('');
                 }}
               >
-                Parse
+                {t('voice.parse')}
               </Button>
             </div>
           </div>
@@ -271,13 +293,14 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                {matchedCount} matched{unmatchedCount > 0 ? ` · ${unmatchedCount} not recognised` : ''}
+                {t('voice.matched', { count: matchedCount })}
+                {unmatchedCount > 0 ? ` · ${t('voice.notRecognisedCount', { count: unmatchedCount })}` : ''}
               </p>
               <button
                 onClick={clearAll}
                 className="flex items-center gap-0.5 text-xs font-medium text-gray-400 active:text-red-500"
               >
-                <HiOutlineXMark className="h-3.5 w-3.5" /> Clear all
+                <HiOutlineXMark className="h-3.5 w-3.5" /> {t('voice.clearAll')}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
@@ -296,7 +319,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
                   </div>
 
                   {r.product ? (
-                    <p className="text-xs text-brand-500">{formatCurrency(r.product.sellingPrice)} each</p>
+                    <p className="text-xs text-brand-500">{formatCurrency(r.product.sellingPrice)} {t('common.each')}</p>
                   ) : (
                     <select
                       onChange={(e) => assignProduct(i, e.target.value)}
@@ -304,7 +327,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
                       className="mt-1 w-full rounded-lg border border-red-200 bg-white px-1.5 py-1 text-xs"
                     >
                       <option value="" disabled>
-                        Didn't recognise "{r.rawName}" — pick one?
+                        {t('voice.notRecognisedPick', { name: r.rawName })}
                       </option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -336,7 +359,7 @@ export default function VoiceBillingModal({ isOpen, onClose, products, onAddItem
         )}
 
         <Button onClick={handleAddAll} disabled={matchedCount === 0}>
-          {matchedCount > 0 ? `Add ${matchedCount} item${matchedCount > 1 ? 's' : ''} · ${formatCurrency(totalToAdd)}` : 'Add to bill'}
+          {matchedCount > 0 ? t('voice.addItemsToBill', { count: matchedCount, total: formatCurrency(totalToAdd) }) : t('voice.addToBill')}
         </Button>
       </div>
     </Modal>

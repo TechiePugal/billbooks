@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HiMagnifyingGlass } from 'react-icons/hi2';
 import ProductCard from './ProductCard';
 import CategoryFilter from './CategoryFilter';
 
 export default function ProductGrid({ products, categories, isLoading, onAddToCart }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
 
@@ -24,7 +26,7 @@ export default function ProductGrid({ products, categories, isLoading, onAddToCa
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products…"
+            placeholder={t('billing.searchPlaceholder')}
             className="w-full rounded-card border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
           />
         </div>
@@ -40,7 +42,7 @@ export default function ProductGrid({ products, categories, isLoading, onAddToCa
           </div>
         ) : filtered.length === 0 ? (
           <p className="mt-10 text-center text-sm text-gray-400">
-            {search ? 'No products match your search.' : 'No products yet — add some from Inventory.'}
+            {search ? t('billing.noProductsMatch') : t('billing.noProductsYet')}
           </p>
         ) : (
           // auto-rows-fr keeps every row the same height even if a row has fewer

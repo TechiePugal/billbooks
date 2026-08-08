@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ResponsiveContainer,
   LineChart,
@@ -38,6 +39,7 @@ const RANGE_PRESETS = {
 const COLORS = ['#0F5132', '#D4A017', '#3F9B69', '#7E5A0D', '#9FCDB4', '#EFD280'];
 
 export default function Reports() {
+  const { t } = useTranslation();
   const shopId = useAuthStore((s) => s.user?.shopId);
   const { products } = useActiveProducts();
   const categories = useCategories();
@@ -46,6 +48,14 @@ export default function Reports() {
   const [customTo, setCustomTo] = useState('');
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const RANGE_LABELS = {
+    today: t('reports.today'),
+    week: t('reports.week'),
+    month: t('reports.month'),
+    year: t('reports.year'),
+    custom: t('reports.custom')
+  };
 
   useEffect(() => {
     if (!shopId) return;
@@ -74,13 +84,13 @@ export default function Reports() {
   return (
     <div className="p-4 pb-6">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-brand-700">Reports</h1>
+        <h1 className="font-display text-xl font-bold text-brand-700">{t('reports.title')}</h1>
         <button
           onClick={() => exportToCsv(orders, `sales-${range}.csv`)}
           disabled={orders.length === 0}
           className="rounded-card bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-600 disabled:opacity-40"
         >
-          Export CSV
+          {t('reports.exportCsv')}
         </button>
       </div>
 
@@ -89,11 +99,11 @@ export default function Reports() {
           <button
             key={key}
             onClick={() => setRange(key)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize ${
+            className={`rounded-full px-4 py-1.5 text-sm font-medium ${
               range === key ? 'bg-brand-500 text-white' : 'bg-white text-gray-500 shadow-sm'
             }`}
           >
-            {key}
+            {RANGE_LABELS[key]}
           </button>
         ))}
       </div>
@@ -107,7 +117,7 @@ export default function Reports() {
             onChange={(e) => setCustomFrom(e.target.value)}
             className="rounded-card border border-gray-200 bg-white px-3 py-2 text-sm"
           />
-          <span className="text-sm text-gray-400">to</span>
+          <span className="text-sm text-gray-400">{t('common.to')}</span>
           <input
             type="date"
             value={customTo}
@@ -122,19 +132,19 @@ export default function Reports() {
       {range !== 'custom' && <div className="mb-4" />}
 
       {isLoading ? (
-        <p className="py-10 text-center text-sm text-gray-400">Crunching the numbers…</p>
+        <p className="py-10 text-center text-sm text-gray-400">{t('reports.crunchingNumbers')}</p>
       ) : orders.length === 0 ? (
-        <p className="py-10 text-center text-sm text-gray-400">No sales in this period yet.</p>
+        <p className="py-10 text-center text-sm text-gray-400">{t('reports.noSales')}</p>
       ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Total Sales" value={formatCurrency(summary.totalSales)} />
-            <StatCard label="Total Orders" value={summary.totalOrders} />
-            <StatCard label="Avg Order Value" value={formatCurrency(summary.avgOrderValue)} />
-            <StatCard label="Highest Sale" value={formatCurrency(summary.highestSale)} />
+            <StatCard label={t('reports.totalSales')} value={formatCurrency(summary.totalSales)} />
+            <StatCard label={t('reports.totalOrders')} value={summary.totalOrders} />
+            <StatCard label={t('reports.avgOrderValue')} value={formatCurrency(summary.avgOrderValue)} />
+            <StatCard label={t('reports.highestSale')} value={formatCurrency(summary.highestSale)} />
           </div>
 
-          <ChartCard title="Sales Trend">
+          <ChartCard title={t('reports.salesTrend')}>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={dailyData} margin={{ left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#EAF4EF" />
@@ -147,7 +157,7 @@ export default function Reports() {
           </ChartCard>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <ChartCard title="Hourly Sales">
+            <ChartCard title={t('reports.hourlySales')}>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={hourlyData} margin={{ left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#EAF4EF" />
@@ -159,7 +169,7 @@ export default function Reports() {
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard title="Payment Method Split">
+            <ChartCard title={t('reports.paymentMethodSplit')}>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={paymentData} dataKey="total" nameKey="method" outerRadius={65} label={{ fontSize: 10 }}>
@@ -173,11 +183,9 @@ export default function Reports() {
             </ChartCard>
           </div>
 
-          <ChartCard title="Category-wise Sales">
+          <ChartCard title={t('reports.categorySales')}>
             {catData.length === 0 ? (
-              <p className="py-4 text-center text-xs text-gray-400">
-                No category data — items need a category assigned in Inventory.
-              </p>
+              <p className="py-4 text-center text-xs text-gray-400">{t('reports.noCategoryData')}</p>
             ) : (
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -193,22 +201,23 @@ export default function Reports() {
           </ChartCard>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <RankList title="Top Selling Products" items={topSelling} />
-            <RankList title="Least Selling Products" items={leastSelling} />
+            <RankList title={t('reports.topSelling')} items={topSelling} soldLabel={t('common.sold')} noDataLabel={t('reports.noDataPeriod')} />
+            <RankList title={t('reports.leastSelling')} items={leastSelling} soldLabel={t('common.sold')} noDataLabel={t('reports.noDataPeriod')} />
           </div>
 
           <div className="mt-4 rounded-card bg-white p-3 shadow-card">
-            <p className="mb-2 text-sm font-semibold text-brand-700">Top Customers</p>
+            <p className="mb-2 text-sm font-semibold text-brand-700">{t('reports.topCustomers')}</p>
             {customers.length === 0 ? (
-              <p className="text-xs text-gray-400">
-                No repeat-identifiable customers yet — phone numbers are optional at checkout.
-              </p>
+              <p className="text-xs text-gray-400">{t('reports.noCustomersYet')}</p>
             ) : (
               <ul className="space-y-1.5 text-sm">
                 {customers.slice(0, 8).map((c) => (
                   <li key={c.phone} className="flex justify-between">
                     <span>
-                      {c.name} <span className="text-xs text-gray-400">· {c.visits} visit{c.visits > 1 ? 's' : ''}</span>
+                      {c.name}{' '}
+                      <span className="text-xs text-gray-400">
+                        · {c.visits} {c.visits > 1 ? t('common.visits') : t('common.visit')}
+                      </span>
                     </span>
                     <span className="font-medium text-brand-600">{formatCurrency(c.spend)}</span>
                   </li>
@@ -240,12 +249,12 @@ function ChartCard({ title, children }) {
   );
 }
 
-function RankList({ title, items }) {
+function RankList({ title, items, soldLabel, noDataLabel }) {
   return (
     <div className="rounded-card bg-white p-3 shadow-card">
       <p className="mb-2 text-sm font-semibold text-brand-700">{title}</p>
       {items.length === 0 ? (
-        <p className="text-xs text-gray-400">No data for this period.</p>
+        <p className="text-xs text-gray-400">{noDataLabel}</p>
       ) : (
         <ul className="space-y-1.5 text-sm">
           {items.map((item, i) => (
@@ -253,7 +262,7 @@ function RankList({ title, items }) {
               <span>
                 {i + 1}. {item.name}
               </span>
-              <span className="font-medium text-gray-500">{item.qty} sold</span>
+              <span className="font-medium text-gray-500">{item.qty} {soldLabel}</span>
             </li>
           ))}
         </ul>

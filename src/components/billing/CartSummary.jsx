@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { formatCurrency, calculateBillTotals } from '../../utils/billing';
 import { useCartStore } from '../../store/cartStore';
 
 export default function CartSummary({ items }) {
+  const { t } = useTranslation();
   const discount = useCartStore((s) => s.discount);
   const setDiscount = useCartStore((s) => s.setDiscount);
   const [showDiscountInput, setShowDiscountInput] = useState(false);
@@ -11,14 +13,14 @@ export default function CartSummary({ items }) {
 
   return (
     <div className="space-y-1.5 border-t border-dashed border-gray-200 pt-3 text-sm">
-      <Row label="Subtotal" value={formatCurrency(totals.subtotal)} />
+      <Row label={t('cart.subtotal')} value={formatCurrency(totals.subtotal)} />
 
       <div className="flex items-center justify-between">
         <button
           onClick={() => setShowDiscountInput((v) => !v)}
           className="text-gray-500 underline decoration-dotted"
         >
-          Discount
+          {t('cart.discount')}
         </button>
         {showDiscountInput ? (
           <div className="flex items-center gap-1">
@@ -42,11 +44,11 @@ export default function CartSummary({ items }) {
         )}
       </div>
 
-      <Row label="GST" value={formatCurrency(totals.gstAmount)} />
-      <Row label="Round off" value={formatCurrency(totals.roundOff)} />
+      <Row label={t('cart.gst')} value={formatCurrency(totals.gstAmount)} />
+      <Row label={t('cart.roundOff')} value={formatCurrency(totals.roundOff)} />
 
       <div className="flex items-center justify-between border-t border-gray-200 pt-2 text-base font-display font-bold text-brand-700">
-        <span>Grand Total</span>
+        <span>{t('cart.grandTotal')}</span>
         <span>{formatCurrency(totals.grandTotal)}</span>
       </div>
     </div>

@@ -1,25 +1,27 @@
 import { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { HiOutlineArrowDownTray, HiOutlineClipboard } from 'react-icons/hi2';
 import { buildUpiLink } from '../../utils/upi';
 
 export default function UpiQr({ qrType = 'dynamic', staticQrUrl, payeeVpa, payeeName, amount, invoiceNumber }) {
+  const { t } = useTranslation();
   const qrWrapperRef = useRef(null);
 
   if (qrType === 'static') {
     if (!staticQrUrl) {
       return (
         <p className="rounded-card bg-yellow-50 p-3 text-center text-xs text-yellow-700">
-          No static QR uploaded yet. Add one in Settings → Payment, or switch checkout to Dynamic QR.
+          {t('payment.noStaticQr')}
         </p>
       );
     }
     return (
       <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-brand-200 bg-white p-4">
         <img src={staticQrUrl} alt="Payment QR" className="h-44 w-44 rounded-md object-contain" />
-        <p className="text-sm font-semibold text-brand-700">Scan and enter amount manually</p>
-        <p className="text-xs text-gray-400">Ask the customer to confirm the amount before paying</p>
+        <p className="text-sm font-semibold text-brand-700">{t('payment.scanEnterAmount')}</p>
+        <p className="text-xs text-gray-400">{t('payment.confirmAmountWithCustomer')}</p>
       </div>
     );
   }
@@ -27,7 +29,7 @@ export default function UpiQr({ qrType = 'dynamic', staticQrUrl, payeeVpa, payee
   if (!payeeVpa) {
     return (
       <p className="rounded-card bg-yellow-50 p-3 text-center text-xs text-yellow-700">
-        Add your UPI ID in Settings → Payment Settings to enable QR payments.
+        {t('payment.addUpiId')}
       </p>
     );
   }
@@ -59,9 +61,9 @@ export default function UpiQr({ qrType = 'dynamic', staticQrUrl, payeeVpa, payee
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(payeeVpa);
-      toast.success('UPI ID copied');
+      toast.success(t('payment.upiIdCopiedToast'));
     } catch {
-      toast.error('Could not copy — long-press the ID instead');
+      toast.error(t('payment.upiCopyFailedToast'));
     }
   };
 
@@ -70,7 +72,7 @@ export default function UpiQr({ qrType = 'dynamic', staticQrUrl, payeeVpa, payee
       <div ref={qrWrapperRef}>
         <QRCodeSVG value={link} size={180} fgColor="#0F5132" className="h-44 w-44 sm:h-48 sm:w-48" />
       </div>
-      <p className="text-sm font-semibold text-brand-700">Scan &amp; pay exact amount</p>
+      <p className="text-sm font-semibold text-brand-700">{t('payment.scanAndPay')}</p>
       <button onClick={handleCopy} className="flex items-center gap-1 text-xs text-gray-400 active:text-brand-600">
         <span>{payeeVpa}</span>
         <HiOutlineClipboard className="h-3.5 w-3.5" />
@@ -80,7 +82,7 @@ export default function UpiQr({ qrType = 'dynamic', staticQrUrl, payeeVpa, payee
         className="mt-1 flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-600"
       >
         <HiOutlineArrowDownTray className="h-3.5 w-3.5" />
-        Save QR image
+        {t('payment.saveQrImage')}
       </button>
     </div>
   );

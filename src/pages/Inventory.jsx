@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiMagnifyingGlass } from 'react-icons/hi2';
 import toast from 'react-hot-toast';
 import Button from '../components/common/Button';
@@ -9,6 +10,7 @@ import { useAuthStore } from '../store/authStore';
 import { formatCurrency } from '../utils/billing';
 
 export default function Inventory() {
+  const { t } = useTranslation();
   const shopId = useAuthStore((s) => s.user?.shopId);
   const categories = useCategories();
   const [products, setProducts] = useState([]);
@@ -67,10 +69,10 @@ export default function Inventory() {
   }, [products, categories]);
 
   const handleDelete = async (product) => {
-    if (!window.confirm(`Delete "${product.name}"? This can't be undone.`)) return;
+    if (!window.confirm(t('inventory.deleteConfirm', { name: product.name }))) return;
     await deleteProduct(shopId, product.id);
     setProducts((prev) => prev.filter((p) => p.id !== product.id));
-    toast.success('Product deleted');
+    toast.success(t('inventory.productDeletedToast'));
   };
 
   const handleModalClose = () => {
@@ -82,7 +84,7 @@ export default function Inventory() {
   return (
     <div className="p-4 pb-6">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-brand-700">Inventory</h1>
+        <h1 className="font-display text-xl font-bold text-brand-700">{t('inventory.title')}</h1>
         <Button
           size="sm"
           className="!w-auto px-4"
@@ -92,16 +94,16 @@ export default function Inventory() {
           }}
         >
           <span className="flex items-center gap-1">
-            <HiOutlinePlus className="h-4 w-4" /> Add Product
+            <HiOutlinePlus className="h-4 w-4" /> {t('inventory.addProduct')}
           </span>
         </Button>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total Products" value={stats.totalProducts} />
-        <StatCard label="Categories" value={stats.totalCategories} />
-        <StatCard label="Low Stock" value={stats.lowStock} tone="warn" />
-        <StatCard label="Out of Stock" value={stats.outOfStock} tone="danger" />
+        <StatCard label={t('inventory.totalProducts')} value={stats.totalProducts} />
+        <StatCard label={t('inventory.categories')} value={stats.totalCategories} />
+        <StatCard label={t('inventory.lowStock')} value={stats.lowStock} tone="warn" />
+        <StatCard label={t('inventory.outOfStock')} value={stats.outOfStock} tone="danger" />
       </div>
 
       <div className="mb-3 flex flex-col gap-2 sm:flex-row">
@@ -110,7 +112,7 @@ export default function Inventory() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or SKU…"
+            placeholder={t('inventory.searchPlaceholder')}
             className="w-full rounded-card border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm"
           />
         </div>
@@ -119,7 +121,7 @@ export default function Inventory() {
           onChange={(e) => setCategoryFilter(e.target.value)}
           className="rounded-card border border-gray-200 bg-white px-3 py-2.5 text-sm"
         >
-          <option value="all">All categories</option>
+          <option value="all">{t('inventory.allCategories')}</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -131,24 +133,24 @@ export default function Inventory() {
           onChange={(e) => setSortKey(e.target.value)}
           className="rounded-card border border-gray-200 bg-white px-3 py-2.5 text-sm"
         >
-          <option value="name">Sort: Name</option>
-          <option value="price">Sort: Price</option>
-          <option value="stock">Sort: Stock</option>
+          <option value="name">{t('inventory.sortName')}</option>
+          <option value="price">{t('inventory.sortPrice')}</option>
+          <option value="stock">{t('inventory.sortStock')}</option>
         </select>
       </div>
 
       {isLoading ? (
-        <p className="py-10 text-center text-sm text-gray-400">Loading products…</p>
+        <p className="py-10 text-center text-sm text-gray-400">{t('inventory.loadingProducts')}</p>
       ) : filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-gray-400">No products found. Add your first one.</p>
+        <p className="py-10 text-center text-sm text-gray-400">{t('inventory.noProductsFound')}</p>
       ) : (
         <div className="overflow-hidden rounded-card bg-white shadow-card">
           <table className="w-full text-sm">
             <thead className="bg-brand-50 text-left text-xs uppercase text-brand-500">
               <tr>
-                <th className="px-3 py-2">Product</th>
-                <th className="px-3 py-2">Price</th>
-                <th className="px-3 py-2">Stock</th>
+                <th className="px-3 py-2">{t('inventory.product')}</th>
+                <th className="px-3 py-2">{t('inventory.price')}</th>
+                <th className="px-3 py-2">{t('inventory.stock')}</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -182,11 +184,11 @@ export default function Inventory() {
                         setIsModalOpen(true);
                       }}
                       className="mr-2 text-brand-500"
-                      aria-label="Edit"
+                      aria-label={t('common.edit')}
                     >
                       <HiOutlinePencil className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDelete(p)} className="text-red-400" aria-label="Delete">
+                    <button onClick={() => handleDelete(p)} className="text-red-400" aria-label={t('common.delete')}>
                       <HiOutlineTrash className="h-4 w-4" />
                     </button>
                   </td>
@@ -196,7 +198,7 @@ export default function Inventory() {
           </table>
           {hasMore && (
             <button onClick={loadMore} className="w-full py-3 text-sm font-semibold text-brand-500">
-              Load more
+              {t('inventory.loadMore')}
             </button>
           )}
         </div>

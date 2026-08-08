@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { HiOutlineShoppingCart, HiMicrophone } from 'react-icons/hi2';
 import ProductGrid from '../components/billing/ProductGrid';
 import Cart from '../components/billing/Cart';
@@ -11,7 +12,10 @@ import { useAuthStore } from '../store/authStore';
 import { useShopSettings } from '../hooks/useShopSettings';
 import { formatCurrency, calculateBillTotals } from '../utils/billing';
 
+const DATE_LOCALES = { en: 'en-IN', ta: 'ta-IN', hi: 'hi-IN' };
+
 export default function Billing() {
+  const { t, i18n } = useTranslation();
   const { products, isLoading } = useActiveProducts();
   const categories = useCategories();
   const addItem = useCartStore((s) => s.addItem);
@@ -28,10 +32,11 @@ export default function Billing() {
 
   const cartTotal = calculateBillTotals(items, discount).grandTotal;
   const itemCount = items.reduce((sum, i) => sum + i.qty, 0);
+  const dateLocale = DATE_LOCALES[i18n.language] || 'en-IN';
 
   const handleAddToCart = (product) => {
     addItem(product);
-    toast.success(`${product.name} added`, { duration: 700 });
+    toast.success(t('billing.itemAddedToast', { name: product.name }), { duration: 700 });
   };
 
   const handleAddVoiceItems = (voiceResults) => {
@@ -65,13 +70,13 @@ export default function Billing() {
                 {settings.shopName}
               </p>
               <p className="truncate text-[11px] text-gray-400 sm:text-xs">
-                {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} ·{' '}
+                {new Date().toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })} ·{' '}
                 {user?.name || user?.email}
               </p>
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-[10px] text-gray-400 sm:text-xs">Today's Sales</p>
+            <p className="text-[10px] text-gray-400 sm:text-xs">{t('billing.todaysSales')}</p>
             <p className="font-display text-sm font-semibold text-brand-600 sm:text-base">
               {formatCurrency(todaysSales)}
             </p>
@@ -89,7 +94,7 @@ export default function Billing() {
             mobile when the floating cart summary bar is showing so they don't overlap. */}
         <button
           onClick={() => setIsVoiceOpen(true)}
-          aria-label="Voice billing"
+          aria-label={t('voice.title')}
           className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500 text-white shadow-card transition active:scale-95 ${
             items.length > 0 ? 'bottom-24 md:bottom-4' : 'bottom-4'
           }`}
@@ -112,9 +117,11 @@ export default function Billing() {
         >
           <span className="flex items-center gap-2 text-sm font-semibold">
             <HiOutlineShoppingCart className="h-5 w-5" />
-            {itemCount} item{itemCount > 1 ? 's' : ''}
+            {t('billing.itemCount', { count: itemCount })}
           </span>
-          <span className="font-display text-base font-bold">View Cart · {formatCurrency(cartTotal)}</span>
+          <span className="font-display text-base font-bold">
+            {t('billing.viewCart')} · {formatCurrency(cartTotal)}
+          </span>
         </button>
       )}
 

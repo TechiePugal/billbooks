@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HiOutlinePause, HiOutlineTrash, HiXMark } from 'react-icons/hi2';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
@@ -10,6 +11,7 @@ import { calculateBillTotals } from '../../utils/billing';
 import toast from 'react-hot-toast';
 
 export default function Cart({ onCheckout, onClose }) {
+  const { t } = useTranslation();
   const items = useCartStore((s) => s.items);
   const discount = useCartStore((s) => s.discount);
   const customer = useCartStore((s) => s.customer);
@@ -24,24 +26,24 @@ export default function Cart({ onCheckout, onClose }) {
   const handleHold = () => {
     if (items.length === 0) return;
     holdCurrentBill();
-    toast.success('Bill held. Recall it anytime before checkout.');
+    toast.success(t('cart.billHeldToast'));
   };
 
   const handleClear = () => {
     if (items.length === 0) return;
     clearCart();
-    toast('Cart cleared', { icon: '🗑️' });
+    toast(t('cart.cartClearedToast'), { icon: '🗑️' });
   };
 
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-        <h2 className="font-display text-lg font-semibold text-brand-700">Current Bill</h2>
+        <h2 className="font-display text-lg font-semibold text-brand-700">{t('cart.currentBill')}</h2>
         <div className="flex gap-2">
           <button
             onClick={() => setShowHoldList(true)}
             className="relative rounded-full p-2 text-brand-500 active:bg-brand-50"
-            aria-label="Held bills"
+            aria-label={t('cart.heldBills')}
           >
             <HiOutlinePause className="h-5 w-5" />
             {heldBills.length > 0 && (
@@ -50,11 +52,11 @@ export default function Cart({ onCheckout, onClose }) {
               </span>
             )}
           </button>
-          <button onClick={handleClear} className="rounded-full p-2 text-gray-400 active:bg-gray-50" aria-label="Clear cart">
+          <button onClick={handleClear} className="rounded-full p-2 text-gray-400 active:bg-gray-50" aria-label={t('common.delete')}>
             <HiOutlineTrash className="h-5 w-5" />
           </button>
           {onClose && (
-            <button onClick={onClose} className="rounded-full p-2 text-gray-400 active:bg-gray-50" aria-label="Close cart">
+            <button onClick={onClose} className="rounded-full p-2 text-gray-400 active:bg-gray-50" aria-label={t('common.close')}>
               <HiXMark className="h-5 w-5" />
             </button>
           )}
@@ -63,7 +65,7 @@ export default function Cart({ onCheckout, onClose }) {
 
       <div className="flex-1 overflow-y-auto px-4">
         {items.length === 0 ? (
-          <p className="mt-10 text-center text-sm text-gray-400">Tap a product to add it here.</p>
+          <p className="mt-10 text-center text-sm text-gray-400">{t('cart.tapToAdd')}</p>
         ) : (
           <div className="divide-y divide-gray-100">
             {items.map((item) => (
@@ -79,17 +81,17 @@ export default function Cart({ onCheckout, onClose }) {
       >
         <details className="mb-2">
           <summary className="cursor-pointer text-xs font-medium text-gray-400">
-            + Customer details (optional)
+            {t('cart.customerDetailsOptional')}
           </summary>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Input
-              placeholder="Name"
+              placeholder={t('cart.namePlaceholder')}
               value={customer.name}
               onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
               className="!py-2 text-sm"
             />
             <Input
-              placeholder="Phone"
+              placeholder={t('cart.phonePlaceholder')}
               value={customer.phone}
               onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
               className="!py-2 text-sm"
@@ -101,14 +103,14 @@ export default function Cart({ onCheckout, onClose }) {
 
         <div className="mt-3 flex gap-2">
           <Button variant="outline" onClick={handleHold} disabled={items.length === 0}>
-            Hold Bill
+            {t('cart.holdBill')}
           </Button>
           <Button
             variant="primary"
             onClick={() => onCheckout(totals)}
             disabled={items.length === 0}
           >
-            Charge {items.length > 0 ? `· ${items.length} item${items.length > 1 ? 's' : ''}` : ''}
+            {t('cart.charge')} {items.length > 0 ? `· ${t('billing.itemCount', { count: items.length })}` : ''}
           </Button>
         </div>
       </div>

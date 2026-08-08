@@ -33,9 +33,9 @@ export default {
         ink: '#1F2937'
       },
       fontFamily: {
-        display: ['"Fraunces"', 'serif'],
-        body: ['"Inter"', 'system-ui', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'monospace']
+        display: ['"Fraunces"', '"Noto Sans Tamil"', '"Noto Sans Devanagari"', 'serif'],
+        body: ['"Inter"', '"Noto Sans Tamil"', '"Noto Sans Devanagari"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', '"Noto Sans Tamil"', '"Noto Sans Devanagari"', 'monospace']
       },
       borderRadius: {
         card: '1.1rem'

@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HiXMark } from 'react-icons/hi2';
 
 export default function Modal({ isOpen, onClose, title, children, dismissible = true }) {
+  const { t } = useTranslation();
   // Esc closes, and body scroll is locked behind the modal so the page
   // underneath doesn't scroll along with a long modal on mobile.
   useEffect(() => {
@@ -37,7 +39,7 @@ export default function Modal({ isOpen, onClose, title, children, dismissible = 
           <button
             onClick={onClose}
             className="-mr-1.5 flex h-10 w-10 items-center justify-center rounded-full text-gray-400 active:bg-gray-100"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <HiXMark className="h-6 w-6" />
           </button>
