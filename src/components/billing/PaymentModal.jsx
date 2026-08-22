@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -31,8 +31,16 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
   ];
 
   const [method, setMethod] = useState('cash');
-  const [cashReceived, setCashReceived] = useState('');
+  // Shared by cash & card — in both cases the customer is physically handing
+  // over (or the card machine is confirming) a whole amount, so the cashier
+  // types what was actually received rather than the app just assuming it
+  // matches the bill exactly.
+  const [amountReceived, setAmountReceived] = useState('');
   const [split, setSplit] = useState({ cash: '', upi: '', card: '' });
+  // Split is two steps: enter the breakdown, then — only if part of it is
+  // UPI — a QR sized to exactly that UPI portion (not the whole bill),
+  // since that's the actual amount the customer needs to pay by scanning.
+  const [splitStep, setSplitStep] = useState('entry');
   const [transactionId, setTransactionId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [savedOrder, setSavedOrder] = useState(null);
@@ -40,22 +48,42 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
   const invoiceRef = useRef(null);
   const handlePrint = useReactToPrint({ contentRef: invoiceRef });
 
+  useEffect(() => {
+    if (!isOpen) {
+      setMethod('cash');
+      setAmountReceived('');
+      setSplit({ cash: '', upi: '', card: '' });
+      setSplitStep('entry');
+      setTransactionId('');
+      setSavedOrder(null);
+    }
+  }, [isOpen]);
+
   const balanceReturn = useMemo(() => {
-    const received = Number(cashReceived) || 0;
+    const received = Number(amountReceived) || 0;
     return Math.max(received - totals.grandTotal, 0);
-  }, [cashReceived, totals.grandTotal]);
+  }, [amountReceived, totals.grandTotal]);
 
   const splitTotal = useMemo(
     () => (Number(split.cash) || 0) + (Number(split.upi) || 0) + (Number(split.card) || 0),
     [split]
   );
+  const splitUpiAmount = Number(split.upi) || 0;
 
-  const canConfirm =
-    method === 'cash'
-      ? Number(cashReceived) >= totals.grandTotal
+  const canProceed =
+    method === 'cash' || method === 'card'
+      ? Number(amountReceived) >= totals.grandTotal
       : method === 'split'
       ? Math.abs(splitTotal - totals.grandTotal) < 0.5
-      : true;
+      : true; // upi — the QR is already sized to the exact bill amount
+
+  const handleSplitNext = () => {
+    if (splitUpiAmount > 0) {
+      setSplitStep('qr');
+    } else {
+      handleConfirm();
+    }
+  };
 
   const handleConfirm = async () => {
     setIsSaving(true);
@@ -97,11 +125,6 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
   };
 
   const handleStartNewBill = () => {
-    setSavedOrder(null);
-    setCashReceived('');
-    setSplit({ cash: '', upi: '', card: '' });
-    setTransactionId('');
-    setMethod('cash');
     onClose();
   };
 
@@ -140,7 +163,10 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
         {METHODS.map((m) => (
           <button
             key={m.id}
-            onClick={() => setMethod(m.id)}
+            onClick={() => {
+              setMethod(m.id);
+              setSplitStep('entry');
+            }}
             className={`rounded-card py-2 text-sm font-semibold transition ${
               method === m.id ? 'bg-brand-500 text-white' : 'bg-brand-50 text-brand-600'
             }`}
@@ -150,20 +176,27 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
         ))}
       </div>
 
-      {method === 'cash' && (
+      {(method === 'cash' || method === 'card') && (
         <div className="space-y-2">
           <Input
             label={t('payment.amountReceived')}
             type="number"
             inputMode="decimal"
-            value={cashReceived}
-            onChange={(e) => setCashReceived(e.target.value)}
+            value={amountReceived}
+            onChange={(e) => setAmountReceived(e.target.value)}
             autoFocus
           />
           <div className="flex justify-between rounded-card bg-brand-50 px-3 py-2 text-sm font-medium">
             <span>{t('payment.balanceToReturn')}</span>
             <span>{formatCurrency(balanceReturn)}</span>
           </div>
+          {method === 'card' && (
+            <Input
+              label={t('payment.transactionRefOptional')}
+              value={transactionId}
+              onChange={(e) => setTransactionId(e.target.value)}
+            />
+          )}
         </div>
       )}
 
@@ -185,20 +218,12 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
         </div>
       )}
 
-      {method === 'card' && (
-        <Input
-          label={t('payment.transactionRefOptional')}
-          value={transactionId}
-          onChange={(e) => setTransactionId(e.target.value)}
-        />
-      )}
-
-      {method === 'split' && (
+      {method === 'split' && splitStep === 'entry' && (
         <div className="space-y-2">
           {['cash', 'upi', 'card'].map((k) => (
             <Input
               key={k}
-              label={k.toUpperCase()}
+              label={t(`payment.${k}`)}
               type="number"
               inputMode="decimal"
               value={split[k]}
@@ -211,9 +236,40 @@ export default function PaymentModal({ isOpen, onClose, totals }) {
         </div>
       )}
 
-      <Button className="mt-4" onClick={handleConfirm} disabled={!canConfirm} loading={isSaving}>
-        {t('payment.confirmPayment')}
-      </Button>
+      {method === 'split' && splitStep === 'qr' && (
+        <div className="space-y-3">
+          <UpiQr
+            qrType={settings.qrType}
+            staticQrUrl={settings.staticQrUrl}
+            payeeVpa={settings.upiId}
+            payeeName={settings.merchantName || settings.shopName}
+            amount={splitUpiAmount}
+            invoiceNumber="pending"
+          />
+          <Input
+            label={t('payment.transactionIdOptional')}
+            value={transactionId}
+            onChange={(e) => setTransactionId(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => setSplitStep('entry')}
+            className="text-xs font-medium text-gray-400 underline decoration-dotted"
+          >
+            ← {t('payment.split')}
+          </button>
+        </div>
+      )}
+
+      {method === 'split' && splitStep === 'entry' ? (
+        <Button className="mt-4" onClick={handleSplitNext} disabled={!canProceed}>
+          {t('payment.next')}
+        </Button>
+      ) : (
+        <Button className="mt-4" onClick={handleConfirm} disabled={!canProceed} loading={isSaving}>
+          {t('payment.confirmPayment')}
+        </Button>
+      )}
     </Modal>
   );
 }

@@ -2,6 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Color theme system: every `bg-brand-500`, `text-brand-700`, `bg-surface`,
+ * `text-ink` etc. across the whole app reads these CSS variables (see
+ * tailwind.config.js), so switching data-theme / .dark on <html> re-colors
+ * the entire app instantly with zero changes needed in any component file.
+ *
+ * Each hue's dark-mode block is simply that hue's light-mode scale in
+ * reverse: brand-50 (near-white tint) and brand-900 (near-black) trade
+ * places, so a light "tinted background" utility becomes a fittingly dark
+ * one, and a light "dark readable text" utility becomes a fittingly light
+ * one — without hand-tuning each of the 40 individual values twice.
+ */
+
+:root,
+[data-theme='green'] {
+  --brand-50: 234 244 239;
+  --brand-100: 207 230 218;
+  --brand-200: 159 205 180;
+  --brand-300: 111 180 143;
+  --brand-400: 63 155 105;
+  --brand-500: 15 81 50;
+  --brand-600: 12 65 40;
+  --brand-700: 9 49 30;
+  --brand-800: 6 33 20;
+  --brand-900: 3 17 10;
+}
+
+[data-theme='blue'] {
+  --brand-50: 234 242 251;
+  --brand-100: 207 225 245;
+  --brand-200: 159 195 235;
+  --brand-300: 111 165 225;
+  --brand-400: 63 135 215;
+  --brand-500: 20 93 160;
+  --brand-600: 16 74 128;
+  --brand-700: 12 55 96;
+  --brand-800: 8 36 64;
+  --brand-900: 4 18 32;
+}
+
+[data-theme='pink'] {
+  --brand-50: 252 238 243;
+  --brand-100: 248 214 227;
+  --brand-200: 241 173 199;
+  --brand-300: 234 132 171;
+  --brand-400: 227 91 143;
+  --brand-500: 200 29 99;
+  --brand-600: 160 23 79;
+  --brand-700: 120 17 59;
+  --brand-800: 80 11 39;
+  --brand-900: 40 6 19;
+}
+
+[data-theme='red'] {
+  --brand-50: 252 237 236;
+  --brand-100: 248 210 206;
+  --brand-200: 241 165 157;
+  --brand-300: 234 120 108;
+  --brand-400: 227 75 59;
+  --brand-500: 196 41 26;
+  --brand-600: 157 33 21;
+  --brand-700: 118 25 16;
+  --brand-800: 79 17 11;
+  --brand-900: 40 8 5;
+}
+
+:root,
+[data-theme] {
+  --surface: 251 250 247;
+  --ink: 31 41 55;
+}
+
+.dark[data-theme='green'],
+.dark:not([data-theme]) {
+  --brand-50: 3 17 10;
+  --brand-100: 6 33 20;
+  --brand-200: 9 49 30;
+  --brand-300: 12 65 40;
+  --brand-400: 15 81 50;
+  --brand-500: 63 155 105;
+  --brand-600: 111 180 143;
+  --brand-700: 159 205 180;
+  --brand-800: 207 230 218;
+  --brand-900: 234 244 239;
+}
+
+.dark[data-theme='blue'] {
+  --brand-50: 4 18 32;
+  --brand-100: 8 36 64;
+  --brand-200: 12 55 96;
+  --brand-300: 16 74 128;
+  --brand-400: 20 93 160;
+  --brand-500: 63 135 215;
+  --brand-600: 111 165 225;
+  --brand-700: 159 195 235;
+  --brand-800: 207 225 245;
+  --brand-900: 234 242 251;
+}
+
+.dark[data-theme='pink'] {
+  --brand-50: 40 6 19;
+  --brand-100: 80 11 39;
+  --brand-200: 120 17 59;
+  --brand-300: 160 23 79;
+  --brand-400: 200 29 99;
+  --brand-500: 227 91 143;
+  --brand-600: 234 132 171;
+  --brand-700: 241 173 199;
+  --brand-800: 248 214 227;
+  --brand-900: 252 238 243;
+}
+
+.dark[data-theme='red'] {
+  --brand-50: 40 8 5;
+  --brand-100: 79 17 11;
+  --brand-200: 118 25 16;
+  --brand-300: 157 33 21;
+  --brand-400: 196 41 26;
+  --brand-500: 227 75 59;
+  --brand-600: 234 120 108;
+  --brand-700: 241 165 157;
+  --brand-800: 248 210 206;
+  --brand-900: 252 237 236;
+}
+
+.dark {
+  --surface: 20 24 26;
+  --ink: 243 244 246;
+}
+
 html,
 body,
 #root {

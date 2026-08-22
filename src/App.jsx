@@ -27,9 +27,11 @@ function AuthBoundary() {
 
 function ThemeSync() {
   const theme = useUiStore((s) => s.theme);
+  const themeColor = useUiStore((s) => s.themeColor);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
-  }, [theme]);
+    document.documentElement.dataset.theme = themeColor;
+  }, [theme, themeColor]);
   return null;
 }
 

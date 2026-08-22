@@ -5,18 +5,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Deep teal — trust, "open for business" feel. Not the AI-default terracotta/cream.
+        // Driven by CSS custom properties (defined per-theme in index.css) so
+        // the color scheme can switch at runtime from Settings — every
+        // existing `bg-brand-500` etc. across the app re-colors automatically,
+        // with zero changes needed in any component file.
         brand: {
-          50: '#EAF4EF',
-          100: '#CFE6DA',
-          200: '#9FCDB4',
-          300: '#6FB48F',
-          400: '#3F9B69',
-          500: '#0F5132', // primary
-          600: '#0C4128',
-          700: '#09311E',
-          800: '#062114',
-          900: '#03110A'
+          50: 'rgb(var(--brand-50) / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          800: 'rgb(var(--brand-800) / <alpha-value>)',
+          900: 'rgb(var(--brand-900) / <alpha-value>)'
         },
         // Turmeric/mustard accent — nods to Indian food-cart culture, used sparingly
         accent: {
@@ -29,8 +32,8 @@ export default {
           600: '#A97D12',
           700: '#7E5A0D'
         },
-        surface: '#FBFAF7',
-        ink: '#1F2937'
+        surface: 'rgb(var(--surface) / <alpha-value>)',
+        ink: 'rgb(var(--ink) / <alpha-value>)'
       },
       fontFamily: {
         display: ['"Fraunces"', '"Noto Sans Tamil"', '"Noto Sans Devanagari"', 'serif'],

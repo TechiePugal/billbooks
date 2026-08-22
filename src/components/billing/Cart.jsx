@@ -4,6 +4,7 @@ import { HiOutlinePause, HiOutlineTrash, HiXMark } from 'react-icons/hi2';
 import CartItem from './CartItem';
 import CartSummary from './CartSummary';
 import HoldBillModal from './HoldBillModal';
+import HoldLabelModal from './HoldLabelModal';
 import Button from '../common/Button';
 import Input from '../common/Input';
 import { useCartStore } from '../../store/cartStore';
@@ -20,12 +21,13 @@ export default function Cart({ onCheckout, onClose }) {
   const holdCurrentBill = useCartStore((s) => s.holdCurrentBill);
   const heldBills = useCartStore((s) => s.heldBills);
   const [showHoldList, setShowHoldList] = useState(false);
+  const [showHoldLabel, setShowHoldLabel] = useState(false);
 
   const totals = calculateBillTotals(items, discount);
 
-  const handleHold = () => {
-    if (items.length === 0) return;
-    holdCurrentBill();
+  const handleHold = (label) => {
+    holdCurrentBill(label);
+    setShowHoldLabel(false);
     toast.success(t('cart.billHeldToast'));
   };
 
@@ -102,7 +104,7 @@ export default function Cart({ onCheckout, onClose }) {
         <CartSummary items={items} />
 
         <div className="mt-3 flex gap-2">
-          <Button variant="outline" onClick={handleHold} disabled={items.length === 0}>
+          <Button variant="outline" onClick={() => setShowHoldLabel(true)} disabled={items.length === 0}>
             {t('cart.holdBill')}
           </Button>
           <Button
@@ -116,6 +118,7 @@ export default function Cart({ onCheckout, onClose }) {
       </div>
 
       <HoldBillModal isOpen={showHoldList} onClose={() => setShowHoldList(false)} />
+      <HoldLabelModal isOpen={showHoldLabel} onClose={() => setShowHoldLabel(false)} onConfirm={handleHold} />
     </div>
   );
 }

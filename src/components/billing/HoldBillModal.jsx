@@ -32,6 +32,7 @@ export default function HoldBillModal({ isOpen, onClose }) {
               <li key={bill.id} className="flex items-center justify-between rounded-card bg-brand-50 px-3 py-2.5">
                 <div>
                   <p className="text-sm font-medium">
+                    {bill.label ? `${bill.label} · ` : ''}
                     {t('billing.itemCount', { count: bill.items.length })} · {formatCurrency(totals.grandTotal)}
                   </p>
                   <p className="text-xs text-gray-400">

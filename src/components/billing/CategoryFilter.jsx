@@ -16,7 +16,7 @@ function Chip({ label, isActive, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
         isActive ? 'bg-brand-500 text-white' : 'bg-white text-gray-500 shadow-sm'
       }`}
     >

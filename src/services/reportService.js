@@ -115,6 +115,57 @@ export function customerReport(orders) {
   return Object.values(map).sort((a, b) => b.spend - a.spend);
 }
 
+/**
+ * Profit uses the cost price captured on the order item itself when
+ * available (orders placed after cost tracking was added to the cart) —
+ * and falls back to the product's *current* cost price from the live
+ * catalog for older orders that never captured it. The fallback is
+ * necessarily an estimate (today's cost may not match what it cost back
+ * then), so callers should surface `usedEstimatedCost` to the person
+ * reading the report rather than presenting every number as exact.
+ */
+export function profitReport(orders, products) {
+  const productCostById = Object.fromEntries(products.map((p) => [p.id, p.purchasePrice || 0]));
+  const map = {};
+  let usedEstimatedCost = false;
+
+  orders.forEach((o) => {
+    (o.items || []).forEach((item) => {
+      const key = item.productId || item.name;
+      if (!map[key]) map[key] = { name: item.name, qty: 0, revenue: 0, cost: 0 };
+
+      const hasStoredCost = item.purchasePrice != null && item.purchasePrice > 0;
+      const unitCost = hasStoredCost ? item.purchasePrice : productCostById[item.productId] || 0;
+      if (!hasStoredCost) usedEstimatedCost = true;
+
+      map[key].qty += item.qty;
+      map[key].revenue += item.price * item.qty;
+      map[key].cost += unitCost * item.qty;
+    });
+  });
+
+  const list = Object.values(map)
+    .map((p) => ({
+      ...p,
+      profit: p.revenue - p.cost,
+      marginPercent: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue) * 100 : 0
+    }))
+    .sort((a, b) => b.profit - a.profit);
+
+  const totalRevenue = list.reduce((sum, p) => sum + p.revenue, 0);
+  const totalCost = list.reduce((sum, p) => sum + p.cost, 0);
+  const totalProfit = totalRevenue - totalCost;
+
+  return {
+    products: list,
+    totalRevenue,
+    totalCost,
+    totalProfit,
+    overallMarginPercent: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
+    usedEstimatedCost
+  };
+}
+
 export function exportToCsv(orders, filename = 'sales-report.csv') {
   const header = ['Invoice', 'Date', 'Customer', 'Payment', 'Total'];
   const rows = orders.map((o) => [

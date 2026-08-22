@@ -33,6 +33,10 @@ export const useCartStore = create(
                 productId: product.id,
                 name: product.name,
                 price: product.sellingPrice,
+                // Cost price at the moment of sale — captured here (not looked
+                // up later from the live catalog) so a profit report stays
+                // accurate even after the product's cost price changes.
+                purchasePrice: product.purchasePrice ?? 0,
                 gstRate: product.gstRate ?? 0,
                 qty: 1
               }
@@ -60,6 +64,7 @@ export const useCartStore = create(
                 productId: product.id,
                 name: product.name,
                 price: product.sellingPrice,
+                purchasePrice: product.purchasePrice ?? 0,
                 gstRate: product.gstRate ?? 0,
                 qty: safeQty
               }
@@ -96,12 +101,13 @@ export const useCartStore = create(
 
       clearCart: () => set({ items: [], discount: { type: 'flat', value: 0 }, customer: emptyCustomer }),
 
-      holdCurrentBill: () =>
+      holdCurrentBill: (label) =>
         set((state) => ({
           heldBills: [
             ...state.heldBills,
             {
               id: `hold_${Date.now()}`,
+              label: label?.trim() || '',
               items: state.items,
               discount: state.discount,
               customer: state.customer,

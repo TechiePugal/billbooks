@@ -11,6 +11,14 @@ import { useAuthStore } from '../store/authStore';
 import { useUiStore } from '../store/uiStore';
 import { logout } from '../services/authService';
 import { SUPPORTED_LANGUAGES, setAppLanguage } from '../i18n';
+import { THEME_COLORS } from '../store/uiStore';
+
+const THEME_SWATCHES = {
+  green: '#0F5132',
+  blue: '#145DA0',
+  pink: '#C81D63',
+  red: '#C4291A'
+};
 
 export default function Settings() {
   const { t, i18n } = useTranslation();
@@ -25,6 +33,8 @@ export default function Settings() {
   const restoreInputRef = useRef(null);
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const themeColor = useUiStore((s) => s.themeColor);
+  const setThemeColor = useUiStore((s) => s.setThemeColor);
 
   const SECTIONS = [
     { key: 'Shop', label: t('settings.sectionShop') },
@@ -212,6 +222,27 @@ export default function Settings() {
               >
                 {theme === 'light' ? t('settings.switchToDark') : t('settings.switchToLight')}
               </button>
+            </div>
+
+            <div>
+              <span className="mb-1 block text-sm font-medium text-gray-600">{t('settings.themeColor')}</span>
+              <div className="flex gap-3">
+                {THEME_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setThemeColor(color)}
+                    aria-label={t(`settings.color${color.charAt(0).toUpperCase()}${color.slice(1)}`)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full transition ${
+                      themeColor === color ? 'ring-2 ring-offset-2 ring-brand-500' : ''
+                    }`}
+                    style={{ backgroundColor: THEME_SWATCHES[color] }}
+                  >
+                    {themeColor === color && <span className="h-2.5 w-2.5 rounded-full bg-white" />}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-400">{t('settings.themeColorHint')}</p>
             </div>
 
             <div>

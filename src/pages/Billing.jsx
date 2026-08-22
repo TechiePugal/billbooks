@@ -6,33 +6,27 @@ import ProductGrid from '../components/billing/ProductGrid';
 import Cart from '../components/billing/Cart';
 import PaymentModal from '../components/billing/PaymentModal';
 import VoiceBillingModal from '../components/billing/VoiceBillingModal';
+import HeldBillsStrip from '../components/billing/HeldBillsStrip';
 import { useActiveProducts, useCategories } from '../hooks/useProducts';
 import { useCartStore } from '../store/cartStore';
-import { useAuthStore } from '../store/authStore';
-import { useShopSettings } from '../hooks/useShopSettings';
 import { formatCurrency, calculateBillTotals } from '../utils/billing';
 
-const DATE_LOCALES = { en: 'en-IN', ta: 'ta-IN', hi: 'hi-IN' };
-
 export default function Billing() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { products, isLoading } = useActiveProducts();
   const categories = useCategories();
   const addItem = useCartStore((s) => s.addItem);
   const addItemWithQty = useCartStore((s) => s.addItemWithQty);
   const items = useCartStore((s) => s.items);
   const discount = useCartStore((s) => s.discount);
-  const user = useAuthStore((s) => s.user);
-  const { settings } = useShopSettings();
+  const heldBills = useCartStore((s) => s.heldBills);
 
   const [checkoutTotals, setCheckoutTotals] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
-  const [todaysSales] = useState(0); // wired up fully once Reports' daily-sales query lands
 
   const cartTotal = calculateBillTotals(items, discount).grandTotal;
   const itemCount = items.reduce((sum, i) => sum + i.qty, 0);
-  const dateLocale = DATE_LOCALES[i18n.language] || 'en-IN';
 
   const handleAddToCart = (product) => {
     addItem(product);
@@ -60,28 +54,14 @@ export default function Billing() {
     // address bar shows/hides mid-scroll. 5rem = bottom nav height.
     <div className="flex h-[calc(100dvh-5rem)] flex-col md:flex-row">
       <div className="relative flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between gap-2 border-b border-brand-100 bg-white px-3 py-2.5 sm:px-4 sm:py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {settings.logoUrl && (
-              <img src={settings.logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
-            )}
-            <div className="min-w-0">
-              <p className="truncate font-display text-sm font-semibold text-brand-700 sm:text-base">
-                {settings.shopName}
-              </p>
-              <p className="truncate text-[11px] text-gray-400 sm:text-xs">
-                {new Date().toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })} ·{' '}
-                {user?.name || user?.email}
-              </p>
-            </div>
+        {/* No header here on purpose — every pixel of vertical space on this
+            screen goes to products and, when in use, the held-bills strip,
+            since this is the screen a cashier looks at all day. */}
+        {heldBills.length > 0 && (
+          <div className="pt-2">
+            <HeldBillsStrip />
           </div>
-          <div className="shrink-0 text-right">
-            <p className="text-[10px] text-gray-400 sm:text-xs">{t('billing.todaysSales')}</p>
-            <p className="font-display text-sm font-semibold text-brand-600 sm:text-base">
-              {formatCurrency(todaysSales)}
-            </p>
-          </div>
-        </header>
+        )}
 
         <ProductGrid
           products={products}
@@ -95,16 +75,16 @@ export default function Billing() {
         <button
           onClick={() => setIsVoiceOpen(true)}
           aria-label={t('voice.title')}
-          className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500 text-white shadow-card transition active:scale-95 ${
-            items.length > 0 ? 'bottom-24 md:bottom-4' : 'bottom-4'
+          className={`absolute right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-brand-500 text-white shadow-card transition active:scale-95 ${
+            items.length > 0 ? 'bottom-20 md:bottom-3' : 'bottom-3'
           }`}
         >
-          <HiMicrophone className="h-7 w-7" />
+          <HiMicrophone className="h-6 w-6" />
         </button>
       </div>
 
       {/* Desktop / tablet: cart stays visible as a side panel */}
-      <div className="hidden border-l border-brand-100 md:block md:w-[380px]">
+      <div className="hidden border-l border-brand-100 md:block md:w-[360px]">
         <Cart onCheckout={handleCheckout} />
       </div>
 
@@ -112,8 +92,8 @@ export default function Billing() {
       {items.length > 0 && !isCartOpen && (
         <button
           onClick={() => setIsCartOpen(true)}
-          className="animate-slide-up fixed inset-x-3 z-30 flex items-center justify-between rounded-card bg-brand-500 px-4 py-3.5 text-white shadow-card md:hidden"
-          style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom) + 0.75rem)' }}
+          className="animate-slide-up fixed inset-x-3 z-30 flex items-center justify-between rounded-card bg-brand-500 px-4 py-3 text-white shadow-card md:hidden"
+          style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom) + 0.6rem)' }}
         >
           <span className="flex items-center gap-2 text-sm font-semibold">
             <HiOutlineShoppingCart className="h-5 w-5" />

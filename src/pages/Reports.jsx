@@ -23,6 +23,7 @@ import {
   productPerformance,
   categorySales,
   customerReport,
+  profitReport,
   exportToCsv
 } from '../services/reportService';
 import { useAuthStore } from '../store/authStore';
@@ -83,6 +84,7 @@ export default function Reports() {
   const catData = useMemo(() => categorySales(orders, products, categories), [orders, products, categories]);
   const customers = useMemo(() => customerReport(orders), [orders]);
   const { topSelling, leastSelling } = useMemo(() => productPerformance(orders), [orders]);
+  const profit = useMemo(() => profitReport(orders, products), [orders, products]);
 
   return (
     <div className="p-4 pb-6">
@@ -145,6 +147,49 @@ export default function Reports() {
             <StatCard label={t('reports.totalOrders')} value={summary.totalOrders} />
             <StatCard label={t('reports.avgOrderValue')} value={formatCurrency(summary.avgOrderValue)} />
             <StatCard label={t('reports.highestSale')} value={formatCurrency(summary.highestSale)} />
+          </div>
+
+          <div className="mb-4 rounded-card bg-white p-3 shadow-card">
+            <p className="mb-2 text-sm font-semibold text-brand-700">{t('reports.profitReport')}</p>
+            <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label={t('reports.totalRevenue')} value={formatCurrency(profit.totalRevenue)} />
+              <StatCard label={t('reports.totalCost')} value={formatCurrency(profit.totalCost)} />
+              <StatCard label={t('reports.totalProfit')} value={formatCurrency(profit.totalProfit)} tone="profit" />
+              <StatCard label={t('reports.profitMargin')} value={`${profit.overallMarginPercent.toFixed(1)}%`} tone="profit" />
+            </div>
+            {profit.usedEstimatedCost && (
+              <p className="mb-2 text-xs text-amber-600">{t('reports.estimatedCostNote')}</p>
+            )}
+            {profit.products.length === 0 ? (
+              <p className="py-2 text-center text-xs text-gray-400">{t('reports.noDataPeriod')}</p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white text-left uppercase text-gray-400">
+                    <tr>
+                      <th className="pb-1.5">{t('reports.product')}</th>
+                      <th className="pb-1.5 text-center">{t('reports.qtySold')}</th>
+                      <th className="pb-1.5 text-right">{t('reports.revenue')}</th>
+                      <th className="pb-1.5 text-right">{t('reports.profit')}</th>
+                      <th className="pb-1.5 text-right">{t('reports.margin')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {profit.products.map((p) => (
+                      <tr key={p.name}>
+                        <td className="py-1.5 pr-1 font-medium text-ink">{p.name}</td>
+                        <td className="py-1.5 text-center">{p.qty}</td>
+                        <td className="py-1.5 text-right">{formatCurrency(p.revenue)}</td>
+                        <td className={`py-1.5 text-right font-medium ${p.profit >= 0 ? 'text-brand-600' : 'text-red-500'}`}>
+                          {formatCurrency(p.profit)}
+                        </td>
+                        <td className="py-1.5 text-right text-gray-500">{p.marginPercent.toFixed(0)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <ChartCard title={t('reports.salesTrend')}>
@@ -238,11 +283,12 @@ export default function Reports() {
   );
 }
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, tone }) {
+  const toneClass = tone === 'profit' ? 'text-accent-600' : 'text-brand-600';
   return (
     <div className="rounded-card bg-white p-3 shadow-card">
       <p className="text-xs text-gray-400">{label}</p>
-      <p className="font-display text-xl font-bold text-brand-600">{value}</p>
+      <p className={`font-display text-xl font-bold ${toneClass}`}>{value}</p>
     </div>
   );
 }
